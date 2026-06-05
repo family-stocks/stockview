@@ -30,7 +30,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         ...(process.env.RESEARCH_API_KEY ? { 'Authorization': `Bearer ${process.env.RESEARCH_API_KEY}` } : {}),
       },
-      body: JSON.stringify({ tickers: ticker }),
+      body: JSON.stringify({ ticker }),
     });
 
     const data = await res.json().catch(() => ({}));
