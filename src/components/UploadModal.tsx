@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { X, UploadCloud, CheckCircle, AlertCircle } from "lucide-react";
 import Papa from "papaparse";
+
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 export default function UploadModal({ onClose }: { onClose: () => void }) {
   const [tickers, setTickers] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -33,9 +38,9 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
         const parsedTickers = data
           .map(row => row[targetKey]?.trim().toUpperCase())
           .filter(t => t && /^[A-Z.\-]{1,10}$/.test(t));
-        
+
         const uniqueTickers = Array.from(new Set(parsedTickers));
-        
+
         if (uniqueTickers.length === 0) {
           setError("No valid tickers found in the column.");
         } else {
@@ -49,14 +54,64 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     });
   };
 
+  const pollStatus = (jobId: string, deadline: number) => {
+    pollTimer.current = setTimeout(async () => {
+      if (Date.now() > deadline) {
+        setError("Research job timed out. Please check back later.");
+        setIsSubmitting(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/research/status?jobId=${encodeURIComponent(jobId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Status check failed`);
+
+        const status: string = data.status ?? "unknown";
+        setJobStatus(status);
+
+        if (status === "completed" || status === "done" || status === "success") {
+          setIsSuccess(true);
+          setIsSubmitting(false);
+          setTimeout(onClose, 2000);
+        } else if (status === "failed" || status === "error") {
+          throw new Error(data?.error || "Research job failed.");
+        } else {
+          pollStatus(jobId, deadline);
+        }
+      } catch (err: any) {
+        setError(err.message);
+        setIsSubmitting(false);
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    // Mock API call to /api/research
-    setTimeout(() => {
+    setJobStatus(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tickers }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Request failed with status ${res.status}`);
+
+      const jobId: string = data.jobId;
+      if (!jobId) {
+        // API returned success but no jobId — treat as instant completion
+        setIsSuccess(true);
+        setIsSubmitting(false);
+        setTimeout(onClose, 2000);
+        return;
+      }
+      setJobStatus("queued");
+      pollStatus(jobId, Date.now() + POLL_TIMEOUT_MS);
+    } catch (err: any) {
+      setError(err.message);
       setIsSubmitting(false);
-      setIsSuccess(true);
-      setTimeout(onClose, 2000);
-    }, 1500);
+    }
   };
 
   return (
@@ -110,7 +165,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
                   <button className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button>
                   <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
-                    {isSubmitting ? 'Submitting...' : `Run Research`}
+                    {isSubmitting ? (jobStatus ? `Running… (${jobStatus})` : 'Submitting…') : 'Run Research'}
                   </button>
                 </div>
               </div>

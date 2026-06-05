@@ -1,4 +1,4 @@
-# StockConnect — Research Frontend PRD
+# StockView — Research Frontend PRD
 
 **Owner:** Nic Tanze
 **Status:** Draft v0.1
