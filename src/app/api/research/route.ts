@@ -12,12 +12,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'RESEARCH_API_URL is not configured' }, { status: 500 });
   }
 
-  let tickers: string[];
+  let ticker: string;
   try {
     const body = await request.json();
-    tickers = body.tickers;
-    if (!Array.isArray(tickers) || tickers.length === 0) {
-      return NextResponse.json({ error: 'tickers must be a non-empty array' }, { status: 400 });
+    ticker = body.tickers;
+    if (typeof ticker !== 'string' || !ticker.trim()) {
+      return NextResponse.json({ error: 'tickers must be a non-empty string' }, { status: 400 });
     }
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         ...(process.env.RESEARCH_API_KEY ? { 'Authorization': `Bearer ${process.env.RESEARCH_API_KEY}` } : {}),
       },
-      body: JSON.stringify({ tickers }),
+      body: JSON.stringify({ tickers: ticker }),
     });
 
     const data = await res.json().catch(() => ({}));

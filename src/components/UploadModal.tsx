@@ -4,16 +4,25 @@ import { useState, useRef } from "react";
 import { X, UploadCloud, CheckCircle, AlertCircle } from "lucide-react";
 import Papa from "papaparse";
 
-const POLL_INTERVAL_MS = 3000;
-const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const STORAGE_KEY = 'research_jobs';
+
+function loadJobs(): any[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+
+function saveJob(job: any) {
+  const jobs = loadJobs();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([job, ...jobs]));
+}
 
 export default function UploadModal({ onClose }: { onClose: () => void }) {
   const [tickers, setTickers] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ sent: number; total: number } | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [failedTickers, setFailedTickers] = useState<string[]>([]);
+  const abortRef = useRef(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -39,7 +48,7 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
           .map(row => row[targetKey]?.trim().toUpperCase())
           .filter(t => t && /^[A-Z.\-]{1,10}$/.test(t));
 
-        const uniqueTickers = Array.from(new Set(parsedTickers));
+        const uniqueTickers = Array.from(new Set(parsedTickers)) as string[];
 
         if (uniqueTickers.length === 0) {
           setError("No valid tickers found in the column.");
@@ -54,65 +63,53 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
     });
   };
 
-  const pollStatus = (jobId: string, deadline: number) => {
-    pollTimer.current = setTimeout(async () => {
-      if (Date.now() > deadline) {
-        setError("Research job timed out. Please check back later.");
-        setIsSubmitting(false);
-        return;
-      }
-      try {
-        const res = await fetch(`/api/research/status?jobId=${encodeURIComponent(jobId)}`);
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || `Status check failed`);
-
-        const status: string = data.status ?? "unknown";
-        setJobStatus(status);
-
-        if (status === "completed" || status === "done" || status === "success") {
-          setIsSuccess(true);
-          setIsSubmitting(false);
-          setTimeout(onClose, 2000);
-        } else if (status === "failed" || status === "error") {
-          throw new Error(data?.error || "Research job failed.");
-        } else {
-          pollStatus(jobId, deadline);
-        }
-      } catch (err: any) {
-        setError(err.message);
-        setIsSubmitting(false);
-      }
-    }, POLL_INTERVAL_MS);
-  };
-
   const handleSubmit = async () => {
-    setIsSubmitting(true);
-    setJobStatus(null);
+    abortRef.current = false;
+    setProgress({ sent: 0, total: tickers.length });
+    setFailedTickers([]);
     setError(null);
-    try {
-      const res = await fetch("/api/research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tickers }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Request failed with status ${res.status}`);
 
-      const jobId: string = data.jobId;
-      if (!jobId) {
-        // API returned success but no jobId — treat as instant completion
-        setIsSuccess(true);
-        setIsSubmitting(false);
-        setTimeout(onClose, 2000);
-        return;
+    const failed: string[] = [];
+
+    for (let i = 0; i < tickers.length; i++) {
+      if (abortRef.current) break;
+
+      const ticker = tickers[i];
+      try {
+        const res = await fetch("/api/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tickers: ticker }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Status ${res.status}`);
+
+        const jobId = data.job_id || data.jobId || data.id || `${ticker}-${Date.now()}`;
+        saveJob({
+          jobId,
+          tickers: [ticker],
+          submittedAt: new Date().toISOString(),
+          status: normaliseStatus(data),
+          raw: data,
+        });
+      } catch {
+        failed.push(ticker);
       }
-      setJobStatus("queued");
-      pollStatus(jobId, Date.now() + POLL_TIMEOUT_MS);
-    } catch (err: any) {
-      setError(err.message);
-      setIsSubmitting(false);
+
+      setProgress({ sent: i + 1, total: tickers.length });
     }
+
+    setFailedTickers(failed);
+    setIsSuccess(true);
   };
+
+  const handleCancel = () => {
+    abortRef.current = true;
+    onClose();
+  };
+
+  const isSubmitting = progress !== null && !isSuccess;
+  const pct = progress ? Math.round((progress.sent / progress.total) * 100) : 0;
 
   return (
     <div style={{
@@ -122,19 +119,49 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
       padding: '1rem'
     }}>
       <div className="card" style={{ width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative' }}>
-        <button onClick={onClose} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', color: 'var(--text-tertiary)' }}>
+        <button onClick={handleCancel} style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', color: 'var(--text-tertiary)' }}>
           <X size={20} />
         </button>
-        
+
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Trigger Research</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '0.25rem' }}>Upload a CSV with a "Ticker" column to run the research API.</p>
         </div>
 
         {isSuccess ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '2rem 0', color: 'var(--status-up)' }}>
-            <CheckCircle size={48} />
-            <p style={{ fontWeight: 500 }}>Research triggered successfully!</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', padding: '2rem 0' }}>
+            <CheckCircle size={48} color="var(--status-up)" />
+            <p style={{ fontWeight: 500 }}>
+              {progress!.total - failedTickers.length} / {progress!.total} tickers submitted
+            </p>
+            {failedTickers.length > 0 && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--status-down)' }}>
+                {failedTickers.length} failed: {failedTickers.join(', ')}
+              </p>
+            )}
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Jobs are tracked on the <a href="/jobs" style={{ color: 'var(--accent-primary)' }}>Jobs page</a>.
+            </p>
+            <button className="btn btn-secondary" onClick={onClose}>Close</button>
+          </div>
+        ) : isSubmitting ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Sending tickers…</span>
+              <span style={{ fontWeight: 500 }}>{progress!.sent} / {progress!.total}</span>
+            </div>
+            <div style={{ height: '8px', borderRadius: '4px', backgroundColor: 'var(--bg-base)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: '4px',
+                backgroundColor: 'var(--accent-primary)',
+                width: `${pct}%`,
+                transition: 'width 0.2s ease',
+              }} />
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', textAlign: 'center' }}>{pct}% complete</p>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button className="btn btn-secondary" onClick={handleCancel}>Cancel</button>
+            </div>
           </div>
         ) : (
           <>
@@ -161,11 +188,11 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
                     ))}
                   </div>
                 </div>
-                
+
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button className="btn btn-secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-                  <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
-                    {isSubmitting ? (jobStatus ? `Running… (${jobStatus})` : 'Submitting…') : 'Run Research'}
+                  <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleSubmit}>
+                    Run Research
                   </button>
                 </div>
               </div>
@@ -175,4 +202,13 @@ export default function UploadModal({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+function normaliseStatus(raw: Record<string, unknown>): string {
+  const s = String(raw.status || raw.state || '').toLowerCase();
+  if (s.includes('complet') || s.includes('done') || s.includes('success')) return 'completed';
+  if (s.includes('fail') || s.includes('error')) return 'failed';
+  if (s.includes('run') || s.includes('progress')) return 'running';
+  if (s.includes('pend') || s.includes('queue') || s.includes('waiting')) return 'pending';
+  return 'pending';
 }

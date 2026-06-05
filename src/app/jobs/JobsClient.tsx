@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { X, Play, RefreshCw, Loader2, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { X, Play, RefreshCw, Loader2, CheckCircle, XCircle, Clock, AlertCircle, UploadCloud } from "lucide-react";
+import Papa from "papaparse";
 
 type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'unknown';
+type Tab = 'single' | 'csv';
 
 interface Job {
   jobId: string;
@@ -20,9 +22,9 @@ const TERMINAL = new Set<JobStatus>(['completed', 'failed']);
 
 function statusIcon(s: JobStatus) {
   if (s === 'completed') return <CheckCircle size={15} color="var(--status-up)" />;
-  if (s === 'failed')    return <XCircle    size={15} color="var(--status-down)" />;
-  if (s === 'running')   return <Loader2    size={15} color="var(--accent-primary)" style={{ animation: 'spin 1s linear infinite' }} />;
-  if (s === 'pending')   return <Clock      size={15} color="var(--status-warning)" />;
+  if (s === 'failed')    return <XCircle     size={15} color="var(--status-down)" />;
+  if (s === 'running')   return <Loader2     size={15} color="var(--accent-primary)" style={{ animation: 'spin 1s linear infinite' }} />;
+  if (s === 'pending')   return <Clock       size={15} color="var(--status-warning)" />;
   return                        <AlertCircle size={15} color="var(--text-tertiary)" />;
 }
 
@@ -46,21 +48,259 @@ function saveJobs(jobs: Job[]) {
 function normaliseStatus(raw: Record<string, unknown>): JobStatus {
   const s = String(raw.status || raw.state || '').toLowerCase();
   if (s.includes('complet') || s.includes('done') || s.includes('success')) return 'completed';
-  if (s.includes('fail') || s.includes('error'))  return 'failed';
+  if (s.includes('fail') || s.includes('error'))   return 'failed';
   if (s.includes('run') || s.includes('progress')) return 'running';
   if (s.includes('pend') || s.includes('queue') || s.includes('waiting')) return 'pending';
-  return 'unknown';
+  return 'pending';
 }
 
-export default function JobsClient() {
-  const [jobs, setJobs]           = useState<Job[]>([]);
-  const [tickerInput, setInput]   = useState("");
-  const [pendingTickers, setPending] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+async function submitTicker(ticker: string): Promise<Job> {
+  const res = await fetch('/api/research', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tickers: ticker }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `Status ${res.status}`);
+  const jobId = data.job_id || data.jobId || data.id || `${ticker}-${Date.now()}`;
+  return { jobId, tickers: [ticker], submittedAt: new Date().toISOString(), status: normaliseStatus(data), raw: data };
+}
 
-  // Load from localStorage on mount
+// ─── Single ticker tab ────────────────────────────────────────────────────────
+
+function SingleTab({ onJobAdded }: { onJobAdded: (job: Job) => void }) {
+  const [input, setInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastTicker, setLastTicker] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    const ticker = input.trim().toUpperCase();
+    if (!ticker) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const job = await submitTicker(ticker);
+      onJobAdded(job);
+      setLastTicker(ticker);
+      setInput("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSubmit();
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        <input
+          type="text"
+          className="input"
+          placeholder="Ticker symbol (e.g. AAPL)"
+          value={input}
+          onChange={e => setInput(e.target.value.toUpperCase())}
+          onKeyDown={handleKey}
+          disabled={submitting}
+          style={{ flex: 1, fontSize: '0.875rem' }}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={handleSubmit}
+          disabled={submitting || !input.trim()}
+          style={{ flexShrink: 0, gap: '0.5rem' }}
+        >
+          {submitting
+            ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Submitting…</>
+            : <><Play size={15} /> Run Research</>}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ fontSize: '0.8rem', color: 'var(--status-down)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <XCircle size={14} /> {error}
+        </div>
+      )}
+      {lastTicker && !error && (
+        <div style={{ fontSize: '0.8rem', color: 'var(--status-up)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <CheckCircle size={14} /> {lastTicker} submitted — job added below
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CSV tab ──────────────────────────────────────────────────────────────────
+
+function CsvTab({ onJobAdded }: { onJobAdded: (job: Job) => void }) {
+  const [tickers, setTickers] = useState<string[]>([]);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ sent: number; total: number } | null>(null);
+  const [failedTickers, setFailedTickers] = useState<string[]>([]);
+  const [done, setDone] = useState(false);
+  const abortRef = useRef(false);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDone(false);
+    setProgress(null);
+    setParseError(null);
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const data = results.data as any[];
+        const possibleKeys = ['Ticker', 'ticker', 'Symbol', 'symbol'];
+        const targetKey = data.length > 0
+          ? Object.keys(data[0]).find(k => possibleKeys.includes(k)) || ''
+          : '';
+
+        if (!targetKey) {
+          setParseError("Could not find a 'Ticker' or 'Symbol' column in the CSV.");
+          return;
+        }
+
+        const parsed = data
+          .map(row => row[targetKey]?.trim().toUpperCase())
+          .filter((t: string) => t && /^[A-Z.\-]{1,10}$/.test(t));
+
+        const unique = Array.from(new Set(parsed)) as string[];
+        if (unique.length === 0) {
+          setParseError("No valid tickers found in the column.");
+        } else {
+          setTickers(unique);
+        }
+      },
+      error: (err) => setParseError(err.message),
+    });
+  };
+
+  const handleSubmit = async () => {
+    abortRef.current = false;
+    setProgress({ sent: 0, total: tickers.length });
+    setFailedTickers([]);
+    const failed: string[] = [];
+
+    for (let i = 0; i < tickers.length; i++) {
+      if (abortRef.current) break;
+      const ticker = tickers[i];
+      try {
+        const job = await submitTicker(ticker);
+        onJobAdded(job);
+      } catch {
+        failed.push(ticker);
+      }
+      setProgress({ sent: i + 1, total: tickers.length });
+    }
+
+    setFailedTickers(failed);
+    setDone(true);
+  };
+
+  const reset = () => {
+    setTickers([]);
+    setProgress(null);
+    setDone(false);
+    setFailedTickers([]);
+    setParseError(null);
+  };
+
+  const isSubmitting = progress !== null && !done;
+  const pct = progress ? Math.round((progress.sent / progress.total) * 100) : 0;
+
+  if (done) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', padding: '1.5rem 0' }}>
+        <CheckCircle size={40} color="var(--status-up)" />
+        <p style={{ fontWeight: 500 }}>
+          {progress!.total - failedTickers.length} / {progress!.total} tickers submitted
+        </p>
+        {failedTickers.length > 0 && (
+          <p style={{ fontSize: '0.8rem', color: 'var(--status-down)' }}>
+            Failed: {failedTickers.join(', ')}
+          </p>
+        )}
+        <button className="btn btn-secondary" onClick={reset}>Upload another</button>
+      </div>
+    );
+  }
+
+  if (isSubmitting) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Sending tickers…</span>
+          <span style={{ fontWeight: 500 }}>{progress!.sent} / {progress!.total}</span>
+        </div>
+        <div style={{ height: '8px', borderRadius: '4px', backgroundColor: 'var(--bg-base)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: '4px',
+            backgroundColor: 'var(--accent-primary)',
+            width: `${pct}%`,
+            transition: 'width 0.2s ease',
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{pct}% complete</span>
+          <button className="btn btn-secondary" style={{ fontSize: '0.75rem' }} onClick={() => { abortRef.current = true; }}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {tickers.length === 0 ? (
+        <div style={{ border: '2px dashed var(--border-strong)', borderRadius: '0.5rem', padding: '2.5rem 2rem', textAlign: 'center' }}>
+          <UploadCloud size={28} color="var(--text-tertiary)" style={{ margin: '0 auto 0.75rem' }} />
+          <p style={{ fontWeight: 500, marginBottom: '0.5rem', fontSize: '0.875rem' }}>Select a CSV with a "Ticker" column</p>
+          <input type="file" accept=".csv" onChange={handleFile} style={{ display: 'none' }} id="csv-tab-upload" />
+          <label htmlFor="csv-tab-upload" className="btn btn-secondary" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+            Browse Files
+          </label>
+          {parseError && (
+            <p style={{ color: 'var(--status-down)', fontSize: '0.8rem', marginTop: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
+              <AlertCircle size={13} /> {parseError}
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ padding: '0.875rem', backgroundColor: 'var(--bg-base)', borderRadius: '0.5rem', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>Found {tickers.length} tickers</span>
+              <button onClick={reset} style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', textDecoration: 'underline' }}>Clear</button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto' }}>
+              {tickers.map(t => (
+                <span key={t} style={{ padding: '0.2rem 0.5rem', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '0.25rem', fontSize: '0.8rem', border: '1px solid var(--border-strong)' }}>{t}</span>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-primary" onClick={handleSubmit} style={{ gap: '0.5rem' }}>
+              <Play size={15} /> Run Research ({tickers.length})
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
+export default function JobsClient() {
+  const [tab, setTab]     = useState<Tab>('single');
+  const [jobs, setJobs]   = useState<Job[]>([]);
+  const pollingRef        = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => { setJobs(loadJobs()); }, []);
 
   const updateJob = useCallback((jobId: string, patch: Partial<Job>) => {
@@ -83,7 +323,6 @@ export default function JobsClient() {
     }
   }, [updateJob]);
 
-  // Polling loop: every 5 s, poll all non-terminal jobs
   useEffect(() => {
     pollingRef.current = setInterval(() => {
       setJobs(current => {
@@ -92,78 +331,34 @@ export default function JobsClient() {
         return current;
       });
     }, 5000);
-
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [pollStatus]);
 
-  // Add ticker on Enter or comma
-  const handleTickerKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      addTicker(tickerInput);
-    }
-  };
-
-  const addTicker = (raw: string) => {
-    const ticker = raw.trim().toUpperCase().replace(/,/g, '');
-    if (!ticker) return;
-    setPending(prev => prev.includes(ticker) ? prev : [...prev, ticker]);
-    setInput("");
-  };
-
-  const removeTicker = (t: string) => setPending(prev => prev.filter(x => x !== t));
-
-  const submitRun = async () => {
-    const tickers = pendingTickers.length ? pendingTickers : tickerInput.trim().toUpperCase() ? [tickerInput.trim().toUpperCase()] : [];
-    if (!tickers.length) return;
-
-    setSubmitting(true);
-    setSubmitError(null);
-
-    try {
-      const res = await fetch('/api/research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setSubmitError(data.error || 'Request failed');
-        return;
-      }
-
-      const jobId = data.job_id || data.jobId || data.id || String(Date.now());
-      const newJob: Job = {
-        jobId,
-        tickers,
-        submittedAt: new Date().toISOString(),
-        status: normaliseStatus(data),
-        raw: data,
-      };
-
-      setJobs(prev => {
-        const updated = [newJob, ...prev];
-        saveJobs(updated);
-        return updated;
-      });
-      setPending([]);
-      setInput("");
-    } catch (err) {
-      setSubmitError(String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const addJob = useCallback((job: Job) => {
+    setJobs(prev => {
+      const updated = [job, ...prev];
+      saveJobs(updated);
+      return updated;
+    });
+  }, []);
 
   const removeJob = (jobId: string) => {
     setJobs(prev => { const updated = prev.filter(j => j.jobId !== jobId); saveJobs(updated); return updated; });
   };
 
-  const manualRefresh = (job: Job) => pollStatus(job);
-
   const activeCount = jobs.filter(j => !TERMINAL.has(j.status)).length;
+
+  const tabStyle = (t: Tab): React.CSSProperties => ({
+    padding: '0.5rem 1.25rem',
+    fontSize: '0.875rem',
+    fontWeight: 500,
+    borderRadius: '0.375rem',
+    cursor: 'pointer',
+    transition: 'background 0.15s, color 0.15s',
+    background: tab === t ? 'var(--accent-primary)' : 'transparent',
+    color: tab === t ? '#fff' : 'var(--text-secondary)',
+    border: 'none',
+  });
 
   return (
     <div className="container flex" style={{ flexDirection: 'column', gap: '2rem' }}>
@@ -179,69 +374,19 @@ export default function JobsClient() {
         </p>
       </header>
 
-      {/* Submit form */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          New Run
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: '0.25rem', padding: '0.25rem', backgroundColor: 'var(--bg-base)', borderRadius: '0.5rem', width: 'fit-content' }}>
+          <button style={tabStyle('single')} onClick={() => setTab('single')}>Single</button>
+          <button style={tabStyle('csv')} onClick={() => setTab('csv')}>CSV Upload</button>
         </div>
 
-        {/* Ticker chips */}
-        {pendingTickers.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-            {pendingTickers.map(t => (
-              <span key={t} style={{
-                display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                padding: '0.2rem 0.5rem 0.2rem 0.65rem',
-                borderRadius: '0.25rem',
-                backgroundColor: 'rgba(59,130,246,0.12)',
-                border: '1px solid rgba(59,130,246,0.3)',
-                color: 'var(--accent-primary)',
-                fontSize: '0.8rem', fontWeight: 600,
-              }}>
-                {t}
-                <button onClick={() => removeTicker(t)} style={{ color: 'inherit', opacity: 0.7, lineHeight: 1, cursor: 'pointer' }}>
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Input row */}
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            className="input"
-            placeholder="Type a ticker and press Enter (e.g. AAPL)"
-            value={tickerInput}
-            onChange={e => setInput(e.target.value.toUpperCase())}
-            onKeyDown={handleTickerKey}
-            onBlur={() => addTicker(tickerInput)}
-            style={{ flex: 1, minWidth: '220px', fontSize: '0.875rem' }}
-            disabled={submitting}
-          />
-          <button
-            onClick={submitRun}
-            disabled={submitting || (pendingTickers.length === 0 && !tickerInput.trim())}
-            className="btn btn-primary"
-            style={{ gap: '0.5rem', flexShrink: 0 }}
-          >
-            {submitting
-              ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Submitting…</>
-              : <><Play size={15} /> Run Research</>
-            }
-          </button>
-        </div>
-
-        {submitError && (
-          <div style={{ fontSize: '0.8rem', color: 'var(--status-down)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <XCircle size={14} /> {submitError}
-          </div>
-        )}
+        {tab === 'single' && <SingleTab onJobAdded={addJob} />}
+        {tab === 'csv'    && <CsvTab    onJobAdded={addJob} />}
       </div>
 
-      {/* Jobs list */}
-      {jobs.length > 0 && (
+      {/* Job history */}
+      {jobs.length > 0 ? (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Job History</span>
@@ -257,7 +402,7 @@ export default function JobsClient() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                  {['Status', 'Tickers', 'Job ID', 'Submitted', ''].map((col, i) => (
+                  {['Status', 'Ticker', 'Job ID', 'Submitted', ''].map((col, i) => (
                     <th key={i} style={{ padding: '0.75rem 1.5rem', fontWeight: 500 }}>{col}</th>
                   ))}
                 </tr>
@@ -265,7 +410,6 @@ export default function JobsClient() {
               <tbody>
                 {jobs.map(job => (
                   <tr key={job.jobId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    {/* Status */}
                     <td style={{ padding: '0.875rem 1.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         {statusIcon(job.status)}
@@ -280,56 +424,40 @@ export default function JobsClient() {
                       )}
                     </td>
 
-                    {/* Tickers */}
                     <td style={{ padding: '0.875rem 1.5rem' }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                        {job.tickers.map(t => (
-                          <Link
-                            key={t}
-                            href={`/stock/${t}`}
-                            style={{
-                              fontSize: '0.75rem', fontWeight: 600,
-                              color: job.status === 'completed' ? 'var(--accent-primary)' : 'var(--text-secondary)',
-                              textDecoration: job.status === 'completed' ? 'underline' : 'none',
-                            }}
-                          >
-                            {t}
-                          </Link>
-                        ))}
-                      </div>
+                      {job.tickers.map(t => (
+                        <Link
+                          key={t}
+                          href={`/stock/${t}`}
+                          style={{
+                            fontSize: '0.875rem', fontWeight: 600,
+                            color: job.status === 'completed' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                            textDecoration: job.status === 'completed' ? 'underline' : 'none',
+                          }}
+                        >
+                          {t}
+                        </Link>
+                      ))}
                     </td>
 
-                    {/* Job ID */}
                     <td style={{ padding: '0.875rem 1.5rem', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                       <span title={job.jobId}>
                         {job.jobId.length > 20 ? `${job.jobId.slice(0, 8)}…${job.jobId.slice(-6)}` : job.jobId}
                       </span>
                     </td>
 
-                    {/* Submitted */}
                     <td style={{ padding: '0.875rem 1.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                       {new Date(job.submittedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
 
-                    {/* Actions */}
                     <td style={{ padding: '0.875rem 1rem', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end' }}>
                         {!TERMINAL.has(job.status) && (
-                          <button
-                            onClick={() => manualRefresh(job)}
-                            title="Refresh status"
-                            style={{ padding: '0.3rem', borderRadius: '0.25rem', color: 'var(--text-tertiary)' }}
-                            className="hover-bg-transition"
-                          >
+                          <button onClick={() => pollStatus(job)} title="Refresh status" style={{ padding: '0.3rem', borderRadius: '0.25rem', color: 'var(--text-tertiary)' }} className="hover-bg-transition">
                             <RefreshCw size={14} />
                           </button>
                         )}
-                        <button
-                          onClick={() => removeJob(job.jobId)}
-                          title="Remove"
-                          style={{ padding: '0.3rem', borderRadius: '0.25rem', color: 'var(--text-tertiary)' }}
-                          className="hover-bg-transition"
-                        >
+                        <button onClick={() => removeJob(job.jobId)} title="Remove" style={{ padding: '0.3rem', borderRadius: '0.25rem', color: 'var(--text-tertiary)' }} className="hover-bg-transition">
                           <X size={14} />
                         </button>
                       </div>
@@ -340,11 +468,9 @@ export default function JobsClient() {
             </table>
           </div>
         </div>
-      )}
-
-      {jobs.length === 0 && (
+      ) : (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
-          No jobs submitted yet. Add tickers above and click Run Research.
+          No jobs submitted yet.
         </div>
       )}
     </div>
