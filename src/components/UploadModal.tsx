@@ -14,6 +14,7 @@ function loadJobs(): any[] {
 function saveJob(job: any) {
   const jobs = loadJobs();
   localStorage.setItem(STORAGE_KEY, JSON.stringify([job, ...jobs]));
+  window.dispatchEvent(new Event('research-jobs-updated'));
 }
 
 export default function UploadModal({ onClose }: { onClose: () => void }) {

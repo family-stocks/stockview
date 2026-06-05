@@ -301,7 +301,12 @@ export default function JobsClient() {
   const [jobs, setJobs]   = useState<Job[]>([]);
   const pollingRef        = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => { setJobs(loadJobs()); }, []);
+  useEffect(() => {
+    setJobs(loadJobs());
+    const sync = () => setJobs(loadJobs());
+    window.addEventListener('research-jobs-updated', sync);
+    return () => window.removeEventListener('research-jobs-updated', sync);
+  }, []);
 
   const updateJob = useCallback((jobId: string, patch: Partial<Job>) => {
     setJobs(prev => {
