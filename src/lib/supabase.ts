@@ -13,6 +13,8 @@ export const TRADE_PLAN_COLUMNS = 'target_price,stop_loss_price'
 
 export const TRADE_PLAN_LOOKUP_COLUMNS = `id,${TRADE_PLAN_COLUMNS}`
 
+export const TRADE_PLAN_TICKER_LOOKUP_COLUMNS = `id,ticker,created_at,${TRADE_PLAN_COLUMNS}`
+
 export const LIST_COLUMNS = `${BASE_LIST_COLUMNS},${TRADE_PLAN_COLUMNS}`
 
 export const BASE_FULL_COLUMNS =
@@ -42,6 +44,9 @@ export type ResearchReport = {
 
 type ReportRow = Record<string, unknown>
 
+const TARGET_PRICE_KEYS = ['target_price', 'targetPrice', 'price_target', 'fair_value']
+const STOP_LOSS_PRICE_KEYS = ['stop_loss_price', 'stopLossPrice', 'stop_loss']
+
 function isReportRow(value: unknown): value is ReportRow {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
@@ -52,6 +57,13 @@ function rowId(row: unknown): string | null {
   if (typeof id === 'string' && id) return id
   if (typeof id === 'number' && Number.isFinite(id)) return String(id)
   return null
+}
+
+function rowTicker(row: unknown): string | null {
+  if (!isReportRow(row)) return null
+  const ticker = row.ticker
+  if (typeof ticker !== 'string' || !ticker.trim()) return null
+  return ticker.trim().toUpperCase()
 }
 
 function textValue(value: unknown, fallback = ''): string {
@@ -67,6 +79,29 @@ function nullableNumber(value: unknown): number | null {
   return null
 }
 
+function objectValue(value: unknown): ReportRow | null {
+  if (isReportRow(value)) return value
+  if (typeof value !== 'string' || !value.trim()) return null
+
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return isReportRow(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function numberFrom(record: ReportRow | null, keys: string[]): number | null {
+  if (!record) return null
+
+  for (const key of keys) {
+    const value = nullableNumber(record[key])
+    if (value !== null) return value
+  }
+
+  return null
+}
+
 export function isTradePlanColumnError(error: unknown): boolean {
   const message = typeof error === 'object' && error && 'message' in error
     ? String((error as { message?: unknown }).message)
@@ -76,6 +111,7 @@ export function isTradePlanColumnError(error: unknown): boolean {
 
 export function normalizeRow(row: unknown): ResearchReport {
   const record: ReportRow = isReportRow(row) ? row : {}
+  const finalTradeDecision = objectValue(record.final_trade_decision)
 
   return {
     id: textValue(record.id),
@@ -90,8 +126,8 @@ export function normalizeRow(row: unknown): ResearchReport {
     filing_date: textValue(record.sec_filing_date),
     analysis_date: textValue(record.analysis_date) || textValue(record.created_at) || new Date().toISOString(),
     created_at: textValue(record.created_at) || new Date().toISOString(),
-    target_price: nullableNumber(record.target_price ?? record.price_target ?? record.fair_value),
-    stop_loss_price: nullableNumber(record.stop_loss_price ?? record.stop_loss),
+    target_price: numberFrom(record, TARGET_PRICE_KEYS) ?? numberFrom(finalTradeDecision, TARGET_PRICE_KEYS),
+    stop_loss_price: numberFrom(record, STOP_LOSS_PRICE_KEYS) ?? numberFrom(finalTradeDecision, STOP_LOSS_PRICE_KEYS),
     thesis: textValue(record.final_trade_decision) || undefined,
     full_report_markdown: textValue(record.full_report_markdown) || undefined,
   }
@@ -99,6 +135,10 @@ export function normalizeRow(row: unknown): ResearchReport {
 
 export function reportRowId(row: unknown): string | null {
   return rowId(row)
+}
+
+export function reportRowTicker(row: unknown): string | null {
+  return rowTicker(row)
 }
 
 export function mergeRowsById(baseRows: unknown[], patchRows: unknown[]): unknown[] {
@@ -114,5 +154,24 @@ export function mergeRowsById(baseRows: unknown[], patchRows: unknown[]): unknow
     const patch = id ? patches.get(id) : undefined
     if (!patch || !isReportRow(row)) return row
     return { ...row, ...patch }
+  })
+}
+
+export function mergeRowsByTicker(baseRows: unknown[], patchRows: unknown[]): unknown[] {
+  const patches = new Map<string, ReportRow>()
+
+  for (const row of patchRows) {
+    const ticker = rowTicker(row)
+    if (ticker && isReportRow(row) && !patches.has(ticker)) patches.set(ticker, row)
+  }
+
+  return baseRows.map(row => {
+    const ticker = rowTicker(row)
+    const patch = ticker ? patches.get(ticker) : undefined
+    if (!patch || !isReportRow(row)) return row
+
+    const merged = { ...row, ...patch }
+    if (row.id !== undefined) merged.id = row.id
+    return merged
   })
 }

@@ -12,9 +12,12 @@ import {
   FULL_COLUMNS,
   BASE_FULL_COLUMNS,
   TRADE_PLAN_LOOKUP_COLUMNS,
+  TRADE_PLAN_TICKER_LOOKUP_COLUMNS,
   isTradePlanColumnError,
   mergeRowsById,
+  mergeRowsByTicker,
   reportRowId,
+  reportRowTicker,
 } from "@/lib/supabase";
 
 export const revalidate = 3600;
@@ -59,17 +62,35 @@ async function getReport(ticker: string) {
   }
 
   async function enrichTradePlan(row: unknown) {
+    let enriched = row;
     const id = reportRowId(row);
-    if (!id) return row;
 
-    const tradePlan = await supabase
+    if (id) {
+      const tradePlan = await supabase
+        .from("research_reports")
+        .select(TRADE_PLAN_LOOKUP_COLUMNS)
+        .eq("id", id)
+        .maybeSingle();
+
+      if (!tradePlan.error && tradePlan.data) {
+        enriched = mergeRowsById([enriched], [tradePlan.data])[0];
+      }
+    }
+
+    const report = normalizeRow(enriched);
+    if (report.target_price !== null && report.stop_loss_price !== null) return enriched;
+
+    const lookupTicker = reportRowTicker(enriched) || ticker.toUpperCase();
+    const tradePlanByTicker = await supabase
       .from("research_reports")
-      .select(TRADE_PLAN_LOOKUP_COLUMNS)
-      .eq("id", id)
+      .select(TRADE_PLAN_TICKER_LOOKUP_COLUMNS)
+      .in("ticker", [lookupTicker, lookupTicker.toLowerCase()])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (tradePlan.error || !tradePlan.data) return row;
-    return mergeRowsById([row], [tradePlan.data])[0];
+    if (tradePlanByTicker.error || !tradePlanByTicker.data) return enriched;
+    return mergeRowsByTicker([enriched], [tradePlanByTicker.data])[0];
   }
 
   const initial = await fetchReport(FULL_COLUMNS);

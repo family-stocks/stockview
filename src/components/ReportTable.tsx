@@ -9,9 +9,12 @@ import {
   LIST_COLUMNS,
   BASE_LIST_COLUMNS,
   TRADE_PLAN_LOOKUP_COLUMNS,
+  TRADE_PLAN_TICKER_LOOKUP_COLUMNS,
   isTradePlanColumnError,
   mergeRowsById,
+  mergeRowsByTicker,
   reportRowId,
+  reportRowTicker,
   type ResearchReport,
 } from "@/lib/supabase";
 
@@ -41,21 +44,48 @@ function hasTradePlan(report: ResearchReport) {
   return report.target_price !== null || report.stop_loss_price !== null;
 }
 
+function hasIncompleteTradePlan(row: unknown) {
+  const report = normalizeRow(row);
+  return report.target_price === null || report.stop_loss_price === null;
+}
+
+function tickerLookupVariants(tickers: string[]) {
+  return Array.from(new Set(tickers.flatMap(ticker => [ticker, ticker.toLowerCase()])));
+}
+
 async function enrichTradePlans(rows: unknown[] | null) {
   if (!rows?.length) return rows;
 
+  let enriched = rows;
   const ids = rows
     .map(reportRowId)
     .filter((id): id is string => Boolean(id));
-  if (!ids.length) return rows;
 
-  const { data, error } = await supabase
+  if (ids.length) {
+    const { data, error } = await supabase
+      .from("research_reports")
+      .select(TRADE_PLAN_LOOKUP_COLUMNS)
+      .in("id", ids);
+
+    if (!error && data?.length) enriched = mergeRowsById(enriched, data);
+  }
+
+  const missingTickers = Array.from(new Set(
+    enriched
+      .filter(hasIncompleteTradePlan)
+      .map(reportRowTicker)
+      .filter((ticker): ticker is string => Boolean(ticker)),
+  ));
+  if (!missingTickers.length) return enriched;
+
+  const tickerLookup = await supabase
     .from("research_reports")
-    .select(TRADE_PLAN_LOOKUP_COLUMNS)
-    .in("id", ids);
+    .select(TRADE_PLAN_TICKER_LOOKUP_COLUMNS)
+    .in("ticker", tickerLookupVariants(missingTickers))
+    .order("created_at", { ascending: false });
 
-  if (error || !data?.length) return rows;
-  return mergeRowsById(rows, data);
+  if (tickerLookup.error || !tickerLookup.data?.length) return enriched;
+  return mergeRowsByTicker(enriched, tickerLookup.data);
 }
 
 async function fetchReports() {
