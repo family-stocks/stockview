@@ -17,27 +17,24 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <header style={{ borderBottom: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }}>
-            <div className="container flex items-center justify-between" style={{ height: '4rem' }}>
-              <Link href="/" className="flex items-center gap-2 hover-bg-transition" style={{ padding: '0.5rem', borderRadius: '0.375rem' }}>
-                <Terminal size={24} color="var(--accent-primary)" />
-                <span style={{ fontWeight: 600, fontSize: '1.125rem', letterSpacing: '-0.025em' }}>StockConnect</span>
+        <a href="#main" className="skip-nav">Skip to content</a>
+        <div className="app-shell">
+          <header className="topbar">
+            <div className="container topbar-inner">
+              <Link href="/" className="brand-mark">
+                <Terminal size={24} aria-hidden="true" />
+                <span>StockConnect</span>
               </Link>
-              <div className="flex items-center gap-4">
-                <nav className="flex items-center gap-1">
-                  <Link href="/" className="hover-bg-transition" style={{ padding: '0.375rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    Dashboard
-                  </Link>
-                  <Link href="/jobs" className="hover-bg-transition" style={{ padding: '0.375rem 0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    Research Jobs
-                  </Link>
+              <div className="topbar-actions">
+                <nav className="main-nav" aria-label="Primary navigation">
+                  <Link href="/">Dashboard</Link>
+                  <Link href="/jobs">Research Jobs</Link>
                 </nav>
                 <HeaderActions />
               </div>
             </div>
           </header>
-          <main style={{ flex: 1, padding: '2rem 0' }}>
+          <main id="main" className="main-content">
             {children}
           </main>
         </div>
