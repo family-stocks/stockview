@@ -8,11 +8,21 @@ import {
   normalizeRow,
   LIST_COLUMNS,
   BASE_LIST_COLUMNS,
+  TRADE_PLAN_LOOKUP_COLUMNS,
   isTradePlanColumnError,
+  mergeRowsById,
+  reportRowId,
   type ResearchReport,
 } from "@/lib/supabase";
 
 const RATING_OPTIONS = ["BUY", "HOLD", "SELL"] as const;
+
+type LatestPrice = {
+  price: number | null;
+  date: string | null;
+};
+
+type LatestPriceMap = Record<string, LatestPrice>;
 
 function formatDate(value?: string) {
   return value?.split("T")[0] || "";
@@ -31,13 +41,30 @@ function hasTradePlan(report: ResearchReport) {
   return report.target_price !== null || report.stop_loss_price !== null;
 }
 
+async function enrichTradePlans(rows: unknown[] | null) {
+  if (!rows?.length) return rows;
+
+  const ids = rows
+    .map(reportRowId)
+    .filter((id): id is string => Boolean(id));
+  if (!ids.length) return rows;
+
+  const { data, error } = await supabase
+    .from("research_reports")
+    .select(TRADE_PLAN_LOOKUP_COLUMNS)
+    .in("id", ids);
+
+  if (error || !data?.length) return rows;
+  return mergeRowsById(rows, data);
+}
+
 async function fetchReports() {
   const initial = await supabase
     .from("latest_agent_reports")
     .select(LIST_COLUMNS)
     .order("created_at", { ascending: false });
 
-  let data: unknown[] | null = initial.data;
+  let data: unknown[] | null = await enrichTradePlans(initial.data);
   let error: { message: string } | null = initial.error;
 
   if (error && isTradePlanColumnError(error)) {
@@ -45,7 +72,7 @@ async function fetchReports() {
       .from("latest_agent_reports")
       .select(BASE_LIST_COLUMNS)
       .order("created_at", { ascending: false });
-    data = fallback.data;
+    data = await enrichTradePlans(fallback.data);
     error = fallback.error;
   }
 
@@ -60,6 +87,7 @@ export default function ReportTable() {
   const [ratingFilter, setRating] = useState<string[]>([]);
   const [modelFilter, setModel]   = useState<string>("");
   const [selected, setSelected]   = useState<ResearchReport | null>(null);
+  const [latestPrices, setLatestPrices] = useState<LatestPriceMap>({});
 
   const applyReportResult = useCallback((result: Awaited<ReturnType<typeof fetchReports>>) => {
     setLoading(false);
@@ -87,6 +115,27 @@ export default function ReportTable() {
     void loadInitialReports();
     return () => { active = false; };
   }, [applyReportResult]);
+
+  useEffect(() => {
+    const tickers = Array.from(new Set(reports.map(r => r.ticker).filter(Boolean)));
+    if (!tickers.length) return;
+
+    let active = true;
+
+    async function loadLatestPrices() {
+      try {
+        const response = await fetch(`/api/prices?tickers=${encodeURIComponent(tickers.join(","))}`);
+        if (!response.ok) return;
+        const payload = await response.json() as { prices?: LatestPriceMap };
+        if (active) setLatestPrices(payload.prices || {});
+      } catch {
+        // Leave quote cells in the pending state if Tiingo is unavailable.
+      }
+    }
+
+    void loadLatestPrices();
+    return () => { active = false; };
+  }, [reports]);
 
   const closePanel = useCallback(() => setSelected(null), []);
 
@@ -223,7 +272,7 @@ export default function ReportTable() {
             <table className="report-table">
               <thead>
                 <tr>
-                  {["Ticker", "Call", "Trade Plan", "Source", "Generated"].map(col => (
+                  {["Ticker", "Latest", "Call", "Trade Plan", "Source", "Generated"].map(col => (
                     <th key={col}>{col}</th>
                   ))}
                 </tr>
@@ -248,6 +297,12 @@ export default function ReportTable() {
                       <div className="ticker-stack">
                         <span className="ticker-symbol">{r.ticker}</span>
                         <span className="company-name">{r.company}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="latest-price-cell">
+                        <strong>{formatCurrency(latestPrices[r.ticker]?.price)}</strong>
+                        <small>{latestPrices[r.ticker]?.date || "Tiingo pending"}</small>
                       </div>
                     </td>
                     <td>
@@ -283,7 +338,7 @@ export default function ReportTable() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="empty-cell">
+                    <td colSpan={6} className="empty-cell">
                       No reports match your filters.
                     </td>
                   </tr>
@@ -323,6 +378,7 @@ export default function ReportTable() {
             <div className="drawer-body">
               <div className="drawer-grid">
                 {[
+                  { label: "Latest", value: formatCurrency(latestPrices[selected.ticker]?.price) },
                   { label: "Target", value: formatCurrency(selected.target_price) },
                   { label: "Stop loss", value: formatCurrency(selected.stop_loss_price) },
                   { label: "Model", value: selected.model },

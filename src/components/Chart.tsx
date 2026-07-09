@@ -26,11 +26,11 @@ interface ChartProps {
 }
 
 const INDICATORS = [
-  { key: 'sma50',  label: 'SMA 50',  color: '#28d6bd' },
-  { key: 'sma200', label: 'SMA 200', color: '#f6b53f' },
-  { key: 'ema10',  label: 'EMA 10',  color: '#f4f1e8' },
-  { key: 'boll',   label: 'Bollinger', color: 'rgba(40,214,189,0.5)' },
-  { key: 'vwma',   label: 'VWMA',    color: '#7ddfca' },
+  { key: 'sma50',  label: 'SMA 50',  color: '#3b82f6' },
+  { key: 'sma200', label: 'SMA 200', color: '#f59e0b' },
+  { key: 'ema10',  label: 'EMA 10',  color: '#a855f7' },
+  { key: 'boll',   label: 'Bollinger', color: 'rgba(59,130,246,0.5)' },
+  { key: 'vwma',   label: 'VWMA',    color: '#14b8a6' },
 ] as const;
 
 type IndicatorKey = typeof INDICATORS[number]['key'];
@@ -38,15 +38,21 @@ type IndicatorKey = typeof INDICATORS[number]['key'];
 const CHART_OPTS = {
   layout: {
     background: { type: ColorType.Solid, color: 'transparent' },
-    textColor: '#aeb7bc',
+    textColor: '#a1a6b0',
   },
   grid: {
-    vertLines: { color: 'rgba(65,80,92,0.45)', style: 1 as const },
-    horzLines: { color: 'rgba(65,80,92,0.45)', style: 1 as const },
+    vertLines: { color: '#2d3139', style: 1 as const },
+    horzLines: { color: '#2d3139', style: 1 as const },
   },
   crosshair: { mode: CrosshairMode.Normal },
-  timeScale: { borderColor: '#41505c' },
-  rightPriceScale: { borderColor: '#41505c' },
+  timeScale: {
+    borderColor: '#3f4552',
+    fixLeftEdge: true,
+    fixRightEdge: true,
+    rightOffset: 0,
+    lockVisibleTimeRangeOnResize: true,
+  },
+  rightPriceScale: { borderColor: '#3f4552' },
 };
 
 export default function Chart({ data, indicators }: ChartProps) {
@@ -78,34 +84,34 @@ export default function Chart({ data, indicators }: ChartProps) {
     chartRef.current = chart;
 
     const candles = chart.addSeries(CandlestickSeries, {
-      upColor: '#2de1a6', downColor: '#ff6a55',
+      upColor: '#10b981', downColor: '#ef4444',
       borderVisible: false,
-      wickUpColor: '#2de1a6', wickDownColor: '#ff6a55',
+      wickUpColor: '#10b981', wickDownColor: '#ef4444',
     });
     candles.setData(data);
 
     if (indicators) {
-      const sma50 = chart.addSeries(LineSeries, { color: '#28d6bd', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.sma50 });
+      const sma50 = chart.addSeries(LineSeries, { color: '#3b82f6', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.sma50 });
       sma50.setData(indicators.sma50);
       seriesRef.current.sma50 = [sma50];
 
-      const sma200 = chart.addSeries(LineSeries, { color: '#f6b53f', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.sma200 });
+      const sma200 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.sma200 });
       sma200.setData(indicators.sma200);
       seriesRef.current.sma200 = [sma200];
 
-      const ema10 = chart.addSeries(LineSeries, { color: '#f4f1e8', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.ema10 });
+      const ema10 = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.ema10 });
       ema10.setData(indicators.ema10);
       seriesRef.current.ema10 = [ema10];
 
-      const bollUpper = chart.addSeries(LineSeries, { color: 'rgba(40,214,189,0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, visible: shown.boll });
+      const bollUpper = chart.addSeries(LineSeries, { color: 'rgba(59,130,246,0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, visible: shown.boll });
       bollUpper.setData(indicators.boll.map(p => ({ time: p.time, value: p.upper })));
-      const bollMid = chart.addSeries(LineSeries, { color: 'rgba(40,214,189,0.3)', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.boll });
+      const bollMid = chart.addSeries(LineSeries, { color: 'rgba(59,130,246,0.3)', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.boll });
       bollMid.setData(indicators.boll.map(p => ({ time: p.time, value: p.mid })));
-      const bollLower = chart.addSeries(LineSeries, { color: 'rgba(40,214,189,0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, visible: shown.boll });
+      const bollLower = chart.addSeries(LineSeries, { color: 'rgba(59,130,246,0.5)', lineWidth: 1, lineStyle: 2, crosshairMarkerVisible: false, visible: shown.boll });
       bollLower.setData(indicators.boll.map(p => ({ time: p.time, value: p.lower })));
       seriesRef.current.boll = [bollUpper, bollMid, bollLower];
 
-      const vwma = chart.addSeries(LineSeries, { color: '#7ddfca', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.vwma });
+      const vwma = chart.addSeries(LineSeries, { color: '#14b8a6', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.vwma });
       vwma.setData(indicators.vwma);
       seriesRef.current.vwma = [vwma];
     }

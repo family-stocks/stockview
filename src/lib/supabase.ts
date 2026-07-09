@@ -11,6 +11,8 @@ export const BASE_LIST_COLUMNS =
 
 export const TRADE_PLAN_COLUMNS = 'target_price,stop_loss_price'
 
+export const TRADE_PLAN_LOOKUP_COLUMNS = `id,${TRADE_PLAN_COLUMNS}`
+
 export const LIST_COLUMNS = `${BASE_LIST_COLUMNS},${TRADE_PLAN_COLUMNS}`
 
 export const BASE_FULL_COLUMNS =
@@ -40,6 +42,18 @@ export type ResearchReport = {
 
 type ReportRow = Record<string, unknown>
 
+function isReportRow(value: unknown): value is ReportRow {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function rowId(row: unknown): string | null {
+  if (!isReportRow(row)) return null
+  const id = row.id
+  if (typeof id === 'string' && id) return id
+  if (typeof id === 'number' && Number.isFinite(id)) return String(id)
+  return null
+}
+
 function textValue(value: unknown, fallback = ''): string {
   return typeof value === 'string' && value.trim() ? value : fallback
 }
@@ -61,7 +75,7 @@ export function isTradePlanColumnError(error: unknown): boolean {
 }
 
 export function normalizeRow(row: unknown): ResearchReport {
-  const record: ReportRow = row && typeof row === 'object' ? row as ReportRow : {}
+  const record: ReportRow = isReportRow(row) ? row : {}
 
   return {
     id: textValue(record.id),
@@ -81,4 +95,24 @@ export function normalizeRow(row: unknown): ResearchReport {
     thesis: textValue(record.final_trade_decision) || undefined,
     full_report_markdown: textValue(record.full_report_markdown) || undefined,
   }
+}
+
+export function reportRowId(row: unknown): string | null {
+  return rowId(row)
+}
+
+export function mergeRowsById(baseRows: unknown[], patchRows: unknown[]): unknown[] {
+  const patches = new Map<string, ReportRow>()
+
+  for (const row of patchRows) {
+    const id = rowId(row)
+    if (id && isReportRow(row)) patches.set(id, row)
+  }
+
+  return baseRows.map(row => {
+    const id = rowId(row)
+    const patch = id ? patches.get(id) : undefined
+    if (!patch || !isReportRow(row)) return row
+    return { ...row, ...patch }
+  })
 }

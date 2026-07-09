@@ -11,7 +11,10 @@ import {
   normalizeRow,
   FULL_COLUMNS,
   BASE_FULL_COLUMNS,
+  TRADE_PLAN_LOOKUP_COLUMNS,
   isTradePlanColumnError,
+  mergeRowsById,
+  reportRowId,
 } from "@/lib/supabase";
 
 export const revalidate = 3600;
@@ -24,11 +27,8 @@ type ReportSection = {
 
 async function getStockData(ticker: string) {
   const today = new Date().toISOString().split("T")[0];
-  // Fetch 2.5 years so SMA200 has enough warmup data.
-  const warmupStart = new Date(Date.now() - 912 * 86400000).toISOString().split("T")[0];
-  const displayStart = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
 
-  const raw = await getTiingoStockData(ticker, warmupStart, today);
+  const raw = await getTiingoStockData(ticker, undefined, today);
   if (!raw.length) return { candles: [], indicators: null };
 
   const allData: OHLCV[] = raw
@@ -42,8 +42,8 @@ async function getStockData(ticker: string) {
     }))
     .sort((a, b) => a.time.localeCompare(b.time));
 
-  const candles = allData.filter(d => d.time >= displayStart);
-  const indicators = computeAllIndicators(allData, displayStart);
+  const candles = allData;
+  const indicators = computeAllIndicators(allData, allData[0].time);
 
   return { candles, indicators };
 }
@@ -58,14 +58,30 @@ async function getReport(ticker: string) {
       .maybeSingle();
   }
 
+  async function enrichTradePlan(row: unknown) {
+    const id = reportRowId(row);
+    if (!id) return row;
+
+    const tradePlan = await supabase
+      .from("research_reports")
+      .select(TRADE_PLAN_LOOKUP_COLUMNS)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (tradePlan.error || !tradePlan.data) return row;
+    return mergeRowsById([row], [tradePlan.data])[0];
+  }
+
   const initial = await fetchReport(FULL_COLUMNS);
-  let data: unknown = initial.data;
+  let data: unknown = initial.data ? await enrichTradePlan(initial.data) : initial.data;
   let error: { message: string } | null = initial.error;
 
   if (error && isTradePlanColumnError(error)) {
     const fallback = await fetchReport(BASE_FULL_COLUMNS);
     data = fallback.data;
     error = fallback.error;
+
+    if (!error) data = await enrichTradePlan(data);
   }
 
   if (error) return null;
