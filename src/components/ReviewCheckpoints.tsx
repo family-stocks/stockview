@@ -1,5 +1,6 @@
-import { ArrowDownRight, ArrowUpRight, CalendarClock, Clock3, Flag } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarClock, Flag } from "lucide-react";
 import type { ResearchReport } from "@/lib/supabase";
+import { horizonEndDate } from "@/lib/horizon";
 
 export function formatHorizon(report: ResearchReport) {
   if (report.horizon_length === null || !report.horizon_unit) return "Not specified";
@@ -19,8 +20,7 @@ export function formatReviewDate(value: string) {
 }
 
 export default function ReviewCheckpoints({ report }: { report: ResearchReport }) {
-  const deadline = new Date(report.review_deadline_utc);
-  const validDeadline = Number.isFinite(deadline.getTime());
+  const horizonEnd = horizonEndDate(report);
   const hasCheckpoints = report.price_triggers.length > 0 || report.event_triggers.length > 0;
 
   return (
@@ -32,11 +32,10 @@ export default function ReviewCheckpoints({ report }: { report: ResearchReport }
       <div className="review-facts">
         <div><span>Proposed allocation</span><strong>{formatAllocation(report.position_pct)}</strong><small>Model plan · share of portfolio</small></div>
         <div><span>Investment horizon</span><strong>{formatHorizon(report)}</strong><small>Expected thesis timeframe</small></div>
-        <div><span>Review by</span><strong>{formatReviewDate(report.review_deadline_utc)}</strong>
-          <small>{validDeadline ? `${deadline.toISOString().slice(11, 16)} UTC` : "No deadline in this report"}</small></div>
-        <div><span>Maximum review interval</span><strong>{report.reassessment_max_wait_hours === null ? "Not specified" : `${report.reassessment_max_wait_hours} hours`}</strong><small>Reassess sooner if a condition occurs</small></div>
+        <div><span>Horizon end</span><strong>{formatReviewDate(horizonEnd)}</strong>
+          <small>{horizonEnd ? `From analysis date${report.horizon_unit === "trading_days" ? " · weekdays only; holidays not adjusted" : ""}` : "No valid horizon in this report"}</small></div>
+        <div><span>Reassess early</span><strong>Material news or price triggers</strong><small>Otherwise, reassess at horizon end</small></div>
       </div>
-      {report.reassessment_rationale && <p className="review-rationale"><Clock3 size={17} aria-hidden="true" /><span>{report.reassessment_rationale}</span></p>}
       {hasCheckpoints ? (
         <div className="checkpoint-columns">
           <div>

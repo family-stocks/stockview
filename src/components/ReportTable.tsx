@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ReviewCheckpoints, { formatAllocation, formatHorizon, formatReviewDate } from "@/components/ReviewCheckpoints";
+import { horizonEndDate } from "@/lib/horizon";
 import { Search, X, ExternalLink, Loader2 } from "lucide-react";
 import {
   supabase,
@@ -361,7 +362,7 @@ export default function ReportTable() {
                     <td>
                       <div className="checkpoint-table-summary">
                         <strong>{formatHorizon(r)}</strong>
-                        <small>Review: {formatReviewDate(r.review_deadline_utc)}</small>
+                        <small>Horizon end: {formatReviewDate(horizonEndDate(r))}</small>
                       </div>
                     </td>
                     <td>
