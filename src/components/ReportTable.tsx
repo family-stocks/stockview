@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import ReviewCheckpoints, { formatAllocation, formatHorizon, formatReviewDate } from "@/components/ReviewCheckpoints";
 import { Search, X, ExternalLink, Loader2 } from "lucide-react";
 import {
   supabase,
@@ -31,12 +32,12 @@ function formatDate(value?: string) {
   return value?.split("T")[0] || "";
 }
 
-function formatCurrency(value?: number | null) {
+function formatCurrency(value?: number | null, exact = false) {
   if (value === null || value === undefined) return "Unset";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: value >= 100 ? 0 : 2,
+    maximumFractionDigits: !exact && value >= 100 ? 0 : 2,
   }).format(value);
 }
 
@@ -63,7 +64,7 @@ async function enrichTradePlans(rows: unknown[] | null) {
 
   if (ids.length) {
     const { data, error } = await supabase
-      .from("research_reports")
+      .from("agent_reports")
       .select(TRADE_PLAN_LOOKUP_COLUMNS)
       .in("id", ids);
 
@@ -79,7 +80,7 @@ async function enrichTradePlans(rows: unknown[] | null) {
   if (!missingTickers.length) return enriched;
 
   const tickerLookup = await supabase
-    .from("research_reports")
+    .from("agent_reports")
     .select(TRADE_PLAN_TICKER_LOOKUP_COLUMNS)
     .in("ticker", tickerLookupVariants(missingTickers))
     .order("created_at", { ascending: false });
@@ -302,7 +303,7 @@ export default function ReportTable() {
             <table className="report-table">
               <thead>
                 <tr>
-                  {["Ticker", "Latest", "Call", "Trade Plan", "Source", "Generated"].map(col => (
+                  {["Ticker", "Latest", "Call", "Trade Plan", "Horizon / Review", "Source", "Generated"].map(col => (
                     <th key={col}>{col}</th>
                   ))}
                 </tr>
@@ -342,6 +343,10 @@ export default function ReportTable() {
                     </td>
                     <td>
                       <div className="trade-plan-grid">
+                        <div className="price-chip">
+                          <span>Entry</span>
+                          <strong>{formatCurrency(r.entry_price, true)}</strong>
+                        </div>
                         <div className="price-chip price-chip-target">
                           <span>Target</span>
                           <strong>{formatCurrency(r.target_price)}</strong>
@@ -350,6 +355,13 @@ export default function ReportTable() {
                           <span>Stop loss</span>
                           <strong>{formatCurrency(r.stop_loss_price)}</strong>
                         </div>
+                      </div>
+                      <span className="allocation-caption">Proposed allocation: <strong>{formatAllocation(r.position_pct)}</strong></span>
+                    </td>
+                    <td>
+                      <div className="checkpoint-table-summary">
+                        <strong>{formatHorizon(r)}</strong>
+                        <small>Review: {formatReviewDate(r.review_deadline_utc)}</small>
                       </div>
                     </td>
                     <td>
@@ -368,7 +380,7 @@ export default function ReportTable() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="empty-cell">
+                    <td colSpan={7} className="empty-cell">
                       No reports match your filters.
                     </td>
                   </tr>
@@ -409,6 +421,7 @@ export default function ReportTable() {
               <div className="drawer-grid">
                 {[
                   { label: "Latest", value: formatCurrency(latestPrices[selected.ticker]?.price) },
+                  { label: "Entry price", value: formatCurrency(selected.entry_price, true) },
                   { label: "Target", value: formatCurrency(selected.target_price) },
                   { label: "Stop loss", value: formatCurrency(selected.stop_loss_price) },
                   { label: "Model", value: selected.model },
@@ -422,6 +435,8 @@ export default function ReportTable() {
                   </div>
                 ))}
               </div>
+
+              <ReviewCheckpoints report={selected} />
 
               <Link
                 href={`/stock/${selected.ticker}`}

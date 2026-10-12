@@ -667,7 +667,7 @@ tr:focus-visible {
 
 .trade-plan-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(7rem, 1fr));
+  grid-template-columns: repeat(3, minmax(5rem, 1fr));
   gap: 0.55rem;
 }
 
@@ -1398,7 +1398,7 @@ tr:focus-visible {
 }
 
 .stock-price-strip {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .quote-tile strong {
@@ -1469,6 +1469,80 @@ tr:focus-visible {
 
 .report-markdown h4 {
   font-size: 0.85rem;
+}
+
+.stock-review-section {
+  width: min(100% - 3rem, 1600px);
+  margin: 1.5rem auto 0;
+}
+
+.review-panel {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(110deg, rgba(59, 130, 246, 0.08), transparent 65%);
+}
+
+.review-kicker {
+  color: #93baff;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+}
+
+.review-header h2 { font-size: 1.15rem; font-weight: 600; margin-top: 0.3rem; }
+.review-label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-secondary); font-size: 0.75rem; }
+.review-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 1.25rem 1.5rem; gap: 1.5rem; }
+.review-facts > div { border-left: 2px solid var(--border-strong); padding-left: 0.9rem; }
+.review-facts > div:nth-child(3) { border-color: var(--accent-primary); }
+.review-facts span, .review-facts small { display: block; color: var(--text-secondary); font-size: 0.75rem; }
+.review-facts strong { display: block; font-family: var(--font-mono); font-size: 1.15rem; margin: 0.4rem 0; }
+.review-rationale { display: flex; align-items: flex-start; gap: 0.65rem; margin: 0 1.5rem 1.25rem; padding: 1rem; border-radius: 0.5rem; background: var(--bg-base); color: var(--text-secondary); font-size: 0.85rem; line-height: 1.65; }
+.review-rationale svg { flex-shrink: 0; color: #93baff; margin-top: 0.2rem; }
+.checkpoint-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 0.25rem 1.5rem 1.5rem; }
+.checkpoint-columns h3 { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; }
+.checkpoint-columns h3 > span { background: var(--bg-base); color: var(--text-secondary); padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.7rem; }
+.checkpoint-list { list-style: none; }
+.checkpoint-list li { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr); gap: 0.65rem; position: relative; padding-bottom: 1.25rem; }
+.checkpoint-list li:last-child { padding-bottom: 0; }
+.checkpoint-list li:not(:last-child)::before { content: ""; position: absolute; left: 0.85rem; top: 1.75rem; bottom: 0; width: 1px; background: var(--border-subtle); }
+.checkpoint-marker { display: flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 50%; color: #93baff; }
+.checkpoint-list strong { display: block; font-size: 0.85rem; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
+.checkpoint-list p { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.65; margin-top: 0.45rem; overflow-wrap: anywhere; }
+.checkpoint-confirmation { display: inline-block; border: 1px solid var(--border-strong); padding: 0.12rem 0.4rem; border-radius: 0.25rem; margin-top: 0.35rem; color: var(--text-secondary); font-size: 0.7rem; }
+.checkpoint-empty { padding: 0.75rem 1.5rem 1.25rem; font-size: 0.8rem; color: var(--text-secondary); }
+.checkpoint-columns .checkpoint-empty { padding: 0; }
+.review-footer { padding: 0.8rem 1.5rem; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 0.75rem; }
+.checkpoint-table-summary { display: flex; flex-direction: column; gap: 0.25rem; min-width: 10rem; }
+.checkpoint-table-summary strong { font-size: 0.8rem; font-weight: 500; }
+.checkpoint-table-summary small { color: var(--text-secondary); font-size: 0.75rem; }
+.allocation-caption { display: block; margin-top: 0.45rem; font-size: 0.7rem; color: var(--text-secondary); }
+.allocation-caption strong { color: var(--text-primary); font-family: var(--font-mono); font-weight: 500; }
+.report-drawer .review-header { padding: 1rem; }
+.report-drawer .review-label { display: none; }
+.report-drawer .review-facts { grid-template-columns: 1fr; padding: 1rem; gap: 1rem; }
+.report-drawer .review-facts strong { font-size: 1rem; }
+.report-drawer .checkpoint-columns { grid-template-columns: 1fr; padding: 0.5rem 1rem 1rem; gap: 1.25rem; }
+.report-drawer .review-rationale { margin: 0 1rem 1rem; }
+.report-drawer .review-footer { padding: 0.8rem 1rem; }
+
+@media (max-width: 760px) {
+  .stock-review-section { width: calc(100% - 2rem); }
+  .review-header { padding: 1rem; }
+  .review-label { display: none; }
+  .review-facts { grid-template-columns: 1fr; padding: 1rem; gap: 1rem; }
+  .checkpoint-columns { grid-template-columns: 1fr; padding: 0.5rem 1rem 1rem; gap: 1.5rem; }
+  .review-rationale { margin: 0 1rem 1rem; }
 }
 
 @keyframes fadeIn {

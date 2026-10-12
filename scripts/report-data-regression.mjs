@@ -54,3 +54,37 @@ assert.equal(normalizedTickerMerged.target_price, 245);
 assert.equal(normalizedTickerMerged.stop_loss_price, 198);
 
 console.log('report data regression passed');
+
+const checkpoints = normalizeRow({
+  horizon_length: '15', horizon_unit: 'trading_days',
+  review_deadline_utc: '2026-10-17T08:45:00Z', reassessment_max_wait_hours: 120,
+  price_triggers: [{ price: '1070.41', direction: 'crosses_above', confirmation: 'daily_close', rationale: 'Technical repair' }, { price: 'invalid' }],
+  event_triggers: [{ condition: 'Earnings release', rationale: 'Check guidance' }, null],
+});
+assert.equal(checkpoints.horizon_length, 15);
+assert.equal(checkpoints.reassessment_max_wait_hours, 120);
+assert.equal(checkpoints.price_triggers.length, 1);
+assert.equal(checkpoints.price_triggers[0].price, 1070.41);
+assert.equal(checkpoints.price_triggers[0].confirmation, 'daily_close');
+assert.equal(checkpoints.event_triggers.length, 1);
+assert.equal(normalizeRow({}).price_triggers.length, 0);
+assert.equal(normalizeRow({}).horizon_length, null);
+const nestedCheckpoints = normalizeRow({ trade_plan: {
+  horizon_length: 20, horizon_unit: 'trading_days',
+  reassessment: { max_wait_hours: 72, event_triggers: [{ condition: 'CPI release' }] },
+} });
+assert.equal(nestedCheckpoints.horizon_length, 20);
+assert.equal(nestedCheckpoints.reassessment_max_wait_hours, 72);
+assert.equal(nestedCheckpoints.event_triggers[0].condition, 'CPI release');
+assert.equal(normalizeRow({ position_pct: 0 }).position_pct, 0);
+assert.equal(normalizeRow({ position_pct: '6.7' }).position_pct, 6.7);
+assert.equal(normalizeRow({ trade_plan: { position_pct: 10 } }).position_pct, 10);
+assert.equal(normalizeRow({}).position_pct, null);
+console.log('checkpoint normalization regression passed');
+
+assert.equal(normalizeRow({ entry_price: '114.34' }).entry_price, 114.34);
+assert.equal(normalizeRow({ entry_price: 0 }).entry_price, 0);
+assert.equal(normalizeRow({ trade_plan: { entry_price: 112.5 } }).entry_price, 112.5);
+assert.equal(normalizeRow({ entry_price: 114, trade_plan: { entry_price: 112 } }).entry_price, 114);
+assert.equal(normalizeRow({}).entry_price, null);
+console.log('entry price regression passed');

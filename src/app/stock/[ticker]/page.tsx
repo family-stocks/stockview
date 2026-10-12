@@ -1,5 +1,6 @@
 import { isValidElement, type HTMLAttributes, type ReactNode } from "react";
 import Chart from "@/components/Chart";
+import ReviewCheckpoints from "@/components/ReviewCheckpoints";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -67,7 +68,7 @@ async function getReport(ticker: string) {
 
     if (id) {
       const tradePlan = await supabase
-        .from("research_reports")
+        .from("agent_reports")
         .select(TRADE_PLAN_LOOKUP_COLUMNS)
         .eq("id", id)
         .maybeSingle();
@@ -82,7 +83,7 @@ async function getReport(ticker: string) {
 
     const lookupTicker = reportRowTicker(enriched) || ticker.toUpperCase();
     const tradePlanByTicker = await supabase
-      .from("research_reports")
+      .from("agent_reports")
       .select(TRADE_PLAN_TICKER_LOOKUP_COLUMNS)
       .in("ticker", [lookupTicker, lookupTicker.toLowerCase()])
       .order("created_at", { ascending: false })
@@ -109,12 +110,12 @@ async function getReport(ticker: string) {
   return data ? normalizeRow(data) : null;
 }
 
-function formatCurrency(value?: number | null) {
+function formatCurrency(value?: number | null, exact = false) {
   if (value === null || value === undefined) return "Unset";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: value >= 100 ? 0 : 2,
+    maximumFractionDigits: !exact && value >= 100 ? 0 : 2,
   }).format(value);
 }
 
@@ -254,6 +255,11 @@ export default async function StockDetailPage({ params }: { params: Promise<{ ti
               )}
             </div>
             <div className="quote-tile">
+              <span>Entry price</span>
+              <strong>{formatCurrency(report?.entry_price, true)}</strong>
+              <small>Model&apos;s proposed entry</small>
+            </div>
+            <div className="quote-tile">
               <span>Target</span>
               <strong>{formatCurrency(report?.target_price)}</strong>
               {targetMove !== null && (
@@ -283,6 +289,8 @@ export default async function StockDetailPage({ params }: { params: Promise<{ ti
           <Chart data={candles} indicators={indicators ?? undefined} />
         </div>
       </section>
+
+      {report && <div className="stock-review-section"><ReviewCheckpoints report={report} /></div>}
 
       {reportMarkdown && (
         <section className="report-workspace" aria-label="Full research report">
