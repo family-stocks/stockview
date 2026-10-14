@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import ReviewCheckpoints, { formatAllocation, formatHorizon, formatReviewDate } from "@/components/ReviewCheckpoints";
 import { horizonEndDate } from "@/lib/horizon";
+import { normalizeTickers, quoteBatches, type LatestPriceMap } from "@/lib/quotes";
 import { Search, X, ExternalLink, Loader2 } from "lucide-react";
 import {
   supabase,
@@ -21,13 +22,6 @@ import {
 } from "@/lib/supabase";
 
 const RATING_OPTIONS = ["BUY", "HOLD", "SELL"] as const;
-
-type LatestPrice = {
-  price: number | null;
-  date: string | null;
-};
-
-type LatestPriceMap = Record<string, LatestPrice>;
 
 function formatDate(value?: string) {
   return value?.split("T")[0] || "";
@@ -149,24 +143,35 @@ export default function ReportTable() {
   }, [applyReportResult]);
 
   useEffect(() => {
-    const tickers = Array.from(new Set(reports.map(r => r.ticker).filter(Boolean)));
+    const tickers = normalizeTickers(reports.map(r => r.ticker).join(","));
     if (!tickers.length) return;
-
     let active = true;
-
+    const controller = new AbortController();
     async function loadLatestPrices() {
-      try {
-        const response = await fetch(`/api/prices?tickers=${encodeURIComponent(tickers.join(","))}`);
-        if (!response.ok) return;
-        const payload = await response.json() as { prices?: LatestPriceMap };
-        if (active) setLatestPrices(payload.prices || {});
-      } catch {
-        // Leave quote cells in the pending state if Tiingo is unavailable.
+      // Publish each batch as it arrives and keep upstream requests bounded.
+      for (const batch of quoteBatches(tickers)) {
+        if (!active) return;
+        let prices: LatestPriceMap;
+        try {
+          const response = await fetch(`/api/prices?tickers=${encodeURIComponent(batch.join(","))}`, {
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+          });
+          if (!response.ok) throw new Error("Price request failed");
+          const payload = await response.json() as { prices?: LatestPriceMap };
+          if (!payload.prices) throw new Error("Missing prices");
+          prices = Object.fromEntries(batch.map(ticker => [ticker,
+            payload.prices![ticker] || { price: null, date: null, status: "unavailable" },
+          ]));
+        } catch {
+          prices = Object.fromEntries(batch.map(ticker => [ticker, {
+            price: null, date: null, status: "error",
+          }]));
+        }
+        if (active) setLatestPrices(previous => ({ ...previous, ...prices }));
       }
     }
-
     void loadLatestPrices();
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [reports]);
 
   const closePanel = useCallback(() => setSelected(null), []);
@@ -333,8 +338,13 @@ export default function ReportTable() {
                     </td>
                     <td>
                       <div className="latest-price-cell">
-                        <strong>{formatCurrency(latestPrices[r.ticker]?.price)}</strong>
-                        <small>{latestPrices[r.ticker]?.date || "Tiingo pending"}</small>
+                        <strong>{latestPrices[r.ticker]?.price != null
+                          ? formatCurrency(latestPrices[r.ticker].price, true) : "—"}</strong>
+                        <small>{latestPrices[r.ticker]?.status === "ok"
+                          ? `${latestPrices[r.ticker].source}${latestPrices[r.ticker].date ? ` · ${latestPrices[r.ticker].date}` : ""}`
+                          : latestPrices[r.ticker]?.status === "error" ? "Price request failed"
+                          : latestPrices[r.ticker]?.status === "unavailable" ? "No quote available"
+                          : "Loading price…"}</small>
                       </div>
                     </td>
                     <td>
