@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stockview
 
-## Getting Started
+Research reports are read from StockConnect's local PostgreSQL database through its authenticated records API. Supabase is no longer a dependency.
 
-First, run the development server:
+## Local Docker setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Start StockConnect's records stack first. Create a private .env.local with STOCKCONNECT_RECORDS_URL=http://stockconnect-records-records-api-1:8000 and STOCKCONNECT_RECORDS_API_KEY matching StockConnect. Then run:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+    docker compose -p stockview up -d --build
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open http://localhost:3000. The app is bound to localhost. For native Next.js development use http://127.0.0.1:8081 as the records URL instead.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The records key is server-only: never use a NEXT_PUBLIC_ variable for it. The browser calls the read-only /api/reports route; it cannot use that route to insert records. List queries paginate and request only summary columns; detail pages fetch the full report. Records requests are uncached so newly completed reports appear on refresh.
 
-## Learn More
+Chart history and technical indicators read daily OHLCV from StockConnect on the external SSD. Chart requests never call Tiingo or fall back to a provider when local history is missing. The homepage live-price route still calls Tiingo IEX with its existing 60-second cache and requires TIINGO_API_KEY (configured in the local deployment). RESEARCH_API_URL and RESEARCH_API_KEY remain optional for submitting and tracking new research jobs. The research-job integration is separate from report storage and is not configured by the database migration. Jobs currently remain in browser-local tracking and the earnings API. No public deployment or ngrok routing has been changed.
 
-To learn more about Next.js, take a look at the following resources:
+Validation: production build and live records list/detail checks. Repository-wide lint has pre-existing errors in JobsClient.tsx and UploadModal.tsx.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Hosted Vercel deployment
 
-## Deploy on Vercel
+The GitHub master branch deploys to the existing Vercel production project.
+When STOCKCONNECT_RECORDS_URL is absent, the server derives its connection from
+RESEARCH_API_URL (removing /run and appending /stockconnect) and authenticates with
+RESEARCH_API_KEY. The earnings API gateway only exposes GET reports and candles;
+it does not expose database writes. Existing research-job routes and live Tiingo
+quotes keep their current configuration. All credentials stay server-side.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The Mac, external SSD, records API and ngrok tunnel must stay available for hosted
+reports/charts. There is no Supabase fallback. API errors are shown as unavailable.

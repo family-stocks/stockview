@@ -1,4 +1,4 @@
-import type { ResearchReport } from './supabase'
+import type { ResearchReport } from './reports'
 
 export function horizonEndDate(report: Pick<ResearchReport, 'analysis_date' | 'horizon_length' | 'horizon_unit'>): string {
   const date = new Date(report.analysis_date)

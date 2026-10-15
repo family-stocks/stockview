@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    env_file: .env.local
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [records]
+    restart: unless-stopped
+networks:
+  records:
+    external: true
+    name: stockconnect-records

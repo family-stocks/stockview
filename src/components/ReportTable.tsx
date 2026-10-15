@@ -6,20 +6,7 @@ import ReviewCheckpoints, { formatAllocation, formatHorizon, formatReviewDate } 
 import { horizonEndDate } from "@/lib/horizon";
 import { normalizeTickers, quoteBatches, type LatestPriceMap } from "@/lib/quotes";
 import { Search, X, ExternalLink, Loader2 } from "lucide-react";
-import {
-  supabase,
-  normalizeRow,
-  LIST_COLUMNS,
-  BASE_LIST_COLUMNS,
-  TRADE_PLAN_LOOKUP_COLUMNS,
-  TRADE_PLAN_TICKER_LOOKUP_COLUMNS,
-  isTradePlanColumnError,
-  mergeRowsById,
-  mergeRowsByTicker,
-  reportRowId,
-  reportRowTicker,
-  type ResearchReport,
-} from "@/lib/supabase";
+import { normalizeRow, type ResearchReport } from "@/lib/reports";
 
 const RATING_OPTIONS = ["BUY", "HOLD", "SELL"] as const;
 
@@ -40,69 +27,14 @@ function hasTradePlan(report: ResearchReport) {
   return report.target_price !== null || report.stop_loss_price !== null;
 }
 
-function hasIncompleteTradePlan(row: unknown) {
-  const report = normalizeRow(row);
-  return report.target_price === null || report.stop_loss_price === null;
-}
-
-function tickerLookupVariants(tickers: string[]) {
-  return Array.from(new Set(tickers.flatMap(ticker => [ticker, ticker.toLowerCase()])));
-}
-
-async function enrichTradePlans(rows: unknown[] | null) {
-  if (!rows?.length) return rows;
-
-  let enriched = rows;
-  const ids = rows
-    .map(reportRowId)
-    .filter((id): id is string => Boolean(id));
-
-  if (ids.length) {
-    const { data, error } = await supabase
-      .from("agent_reports")
-      .select(TRADE_PLAN_LOOKUP_COLUMNS)
-      .in("id", ids);
-
-    if (!error && data?.length) enriched = mergeRowsById(enriched, data);
+async function fetchReports(): Promise<{data: unknown[] | null; error: {message: string} | null}> {
+  try {
+    const response = await fetch("/api/reports", { cache: "no-store" });
+    if (!response.ok) throw new Error("Reports are temporarily unavailable.");
+    return {data: await response.json(), error: null};
+  } catch (error) {
+    return {data: null, error: {message: error instanceof Error ? error.message : "Unable to load reports."}};
   }
-
-  const missingTickers = Array.from(new Set(
-    enriched
-      .filter(hasIncompleteTradePlan)
-      .map(reportRowTicker)
-      .filter((ticker): ticker is string => Boolean(ticker)),
-  ));
-  if (!missingTickers.length) return enriched;
-
-  const tickerLookup = await supabase
-    .from("agent_reports")
-    .select(TRADE_PLAN_TICKER_LOOKUP_COLUMNS)
-    .in("ticker", tickerLookupVariants(missingTickers))
-    .order("created_at", { ascending: false });
-
-  if (tickerLookup.error || !tickerLookup.data?.length) return enriched;
-  return mergeRowsByTicker(enriched, tickerLookup.data);
-}
-
-async function fetchReports() {
-  const initial = await supabase
-    .from("latest_agent_reports")
-    .select(LIST_COLUMNS)
-    .order("created_at", { ascending: false });
-
-  let data: unknown[] | null = await enrichTradePlans(initial.data);
-  let error: { message: string } | null = initial.error;
-
-  if (error && isTradePlanColumnError(error)) {
-    const fallback = await supabase
-      .from("latest_agent_reports")
-      .select(BASE_LIST_COLUMNS)
-      .order("created_at", { ascending: false });
-    data = await enrichTradePlans(fallback.data);
-    error = fallback.error;
-  }
-
-  return { data, error };
 }
 
 export default function ReportTable() {

@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, CalendarClock, Flag } from "lucide-react";
-import type { ResearchReport } from "@/lib/supabase";
+import type { ResearchReport } from "@/lib/reports";
 import { horizonEndDate } from "@/lib/horizon";
 
 export function formatHorizon(report: ResearchReport) {

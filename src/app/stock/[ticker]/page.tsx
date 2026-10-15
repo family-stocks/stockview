@@ -5,23 +5,12 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getTiingoStockData } from "@/lib/tiingo";
+import { getStoredCandles } from "@/lib/candles-server";
 import { computeAllIndicators, type OHLCV } from "@/lib/indicators";
-import {
-  supabase,
-  normalizeRow,
-  FULL_COLUMNS,
-  BASE_FULL_COLUMNS,
-  TRADE_PLAN_LOOKUP_COLUMNS,
-  TRADE_PLAN_TICKER_LOOKUP_COLUMNS,
-  isTradePlanColumnError,
-  mergeRowsById,
-  mergeRowsByTicker,
-  reportRowId,
-  reportRowTicker,
-} from "@/lib/supabase";
+import { normalizeRow } from "@/lib/reports";
+import { getLocalReports } from "@/lib/records-server";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 type ReportSection = {
   id: string;
@@ -32,7 +21,7 @@ type ReportSection = {
 async function getStockData(ticker: string) {
   const today = new Date().toISOString().split("T")[0];
 
-  const raw = await getTiingoStockData(ticker, undefined, today);
+  const raw = await getStoredCandles(ticker, undefined, today);
   if (!raw.length) return { candles: [], indicators: null };
 
   const allData: OHLCV[] = raw
@@ -53,61 +42,8 @@ async function getStockData(ticker: string) {
 }
 
 async function getReport(ticker: string) {
-  async function fetchReport(columns: string) {
-    return supabase
-      .from("latest_agent_reports")
-      .select(columns)
-      .ilike("ticker", ticker)
-      .limit(1)
-      .maybeSingle();
-  }
-
-  async function enrichTradePlan(row: unknown) {
-    let enriched = row;
-    const id = reportRowId(row);
-
-    if (id) {
-      const tradePlan = await supabase
-        .from("agent_reports")
-        .select(TRADE_PLAN_LOOKUP_COLUMNS)
-        .eq("id", id)
-        .maybeSingle();
-
-      if (!tradePlan.error && tradePlan.data) {
-        enriched = mergeRowsById([enriched], [tradePlan.data])[0];
-      }
-    }
-
-    const report = normalizeRow(enriched);
-    if (report.target_price !== null && report.stop_loss_price !== null) return enriched;
-
-    const lookupTicker = reportRowTicker(enriched) || ticker.toUpperCase();
-    const tradePlanByTicker = await supabase
-      .from("agent_reports")
-      .select(TRADE_PLAN_TICKER_LOOKUP_COLUMNS)
-      .in("ticker", [lookupTicker, lookupTicker.toLowerCase()])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (tradePlanByTicker.error || !tradePlanByTicker.data) return enriched;
-    return mergeRowsByTicker([enriched], [tradePlanByTicker.data])[0];
-  }
-
-  const initial = await fetchReport(FULL_COLUMNS);
-  let data: unknown = initial.data ? await enrichTradePlan(initial.data) : initial.data;
-  let error: { message: string } | null = initial.error;
-
-  if (error && isTradePlanColumnError(error)) {
-    const fallback = await fetchReport(BASE_FULL_COLUMNS);
-    data = fallback.data;
-    error = fallback.error;
-
-    if (!error) data = await enrichTradePlan(data);
-  }
-
-  if (error) return null;
-  return data ? normalizeRow(data) : null;
+  const reports = await getLocalReports(ticker);
+  return reports.length ? normalizeRow(reports[0]) : null;
 }
 
 function formatCurrency(value?: number | null, exact = false) {
