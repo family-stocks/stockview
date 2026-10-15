@@ -21,6 +21,8 @@ export function formatReviewDate(value: string) {
 
 export default function ReviewCheckpoints({ report }: { report: ResearchReport }) {
   const horizonEnd = horizonEndDate(report);
+  const validLevels = report.price_triggers.filter(trigger => Number.isFinite(trigger.price) && trigger.price > 0 && ["crosses_above", "crosses_below"].includes(trigger.direction)).map(trigger => trigger.price);
+  const outerLevels = new Set([Math.min(...validLevels), Math.max(...validLevels)]);
   const hasCheckpoints = report.price_triggers.length > 0 || report.event_triggers.length > 0;
 
   return (
@@ -48,6 +50,7 @@ export default function ReviewCheckpoints({ report }: { report: ResearchReport }
                 return <li key={index}>
                   <span className="checkpoint-marker"><Icon size={17} aria-hidden="true" /></span>
                   <div><div className="checkpoint-condition"><strong>{above ? "Crosses above" : below ? "Crosses below" : trigger.direction.replaceAll("_", " ") || "Price level"} {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(trigger.price)}</strong></div>
+                    <span className="checkpoint-confirmation">{outerLevels.has(trigger.price) ? "Outer price level · eligible for screening on latest SELL/HOLD report" : "Context only · not used for automatic screening"}</span>
                     {trigger.confirmation && <span className="checkpoint-confirmation">{trigger.confirmation === "daily_close" ? "Report originally requested daily-close confirmation" : "Report originally requested intraday crossing"}</span>}
                     {trigger.rationale && <p>{trigger.rationale}</p>}
                   </div>
@@ -66,7 +69,7 @@ export default function ReviewCheckpoints({ report }: { report: ResearchReport }
           </div>
         </div>
       ) : <p className="checkpoint-empty">This report does not specify price or event checkpoints.</p>}
-      {hasCheckpoints && <footer className="review-footer">For the latest SELL or HOLD report, price checks compare Tiingo live prices with the previous trading day’s close every 15 minutes during US market hours. All price levels use live crossings. A brief Codex review checks current web prices and potential buying opportunities before deciding whether to request a full analysis. Rationale is research context, not an automatic rule.</footer>}
+      {hasCheckpoints && <footer className="review-footer">For the latest SELL or HOLD report, only the minimum and maximum trigger levels are checked. Price checks compare Tiingo live prices with the previous trading day’s close every 15 minutes during US market hours. All price levels use live crossings. A brief Codex review checks current web prices and potential buying opportunities before deciding whether to request a full analysis. Tickers run in the past 24 hours or already queued are excluded. Rationale is research context, not an automatic rule.</footer>}
     </section>
   );
 }
