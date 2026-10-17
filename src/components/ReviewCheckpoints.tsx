@@ -69,7 +69,7 @@ export default function ReviewCheckpoints({ report }: { report: ResearchReport }
           </div>
         </div>
       ) : <p className="checkpoint-empty">This report does not specify price or event checkpoints.</p>}
-      {hasCheckpoints && <footer className="review-footer">For the latest SELL or HOLD report, only the minimum and maximum trigger levels are checked. Price checks compare Tiingo live prices with the previous trading day’s close every 15 minutes during US market hours. All price levels use live crossings. A brief Codex review checks current web prices and potential buying opportunities before deciding whether to request a full analysis. Tickers run in the past 24 hours or already queued are excluded. Rationale is research context, not an automatic rule.</footer>}
+      {hasCheckpoints && <footer className="review-footer">For the latest SELL or HOLD report, only the minimum and maximum trigger levels are checked. Price checks use fresh Tiingo live prices every 15 minutes during US market hours. A level qualifies while the live price is above an upward trigger or below a downward trigger, even if the previous close was already beyond it. A brief Codex review checks current web prices and potential buying opportunities before deciding whether to request a full analysis. Tickers run in the past 24 hours or already queued are excluded. Rationale is research context, not an automatic rule.</footer>}
     </section>
   );
 }
