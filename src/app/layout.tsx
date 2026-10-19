@@ -29,6 +29,7 @@ export default function RootLayout({
                 <nav className="main-nav" aria-label="Primary navigation">
                   <Link href="/">Dashboard</Link>
                   <Link href="/jobs">Research Jobs</Link>
+                  <Link href="/triggers">Triggers</Link>
                 </nav>
                 <HeaderActions />
               </div>

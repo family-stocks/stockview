@@ -28,3 +28,15 @@ quotes keep their current configuration. All credentials stay server-side.
 
 The Mac, external SSD, records API and ngrok tunnel must stay available for hosted
 reports/charts. There is no Supabase fallback. API errors are shown as unavailable.
+
+## Trigger results
+
+The Triggers tab (`/triggers`) reads StockConnect's persisted research decisions.
+Filter by ticker, report-price/news/earnings-calendar/daily-discovery trigger, and
+submission outcome. Expand a result for rationale, risks, source links, evidence
+and the submitted job ID. Sent means accepted by the agent, not completed.
+Results paginate 25 at a time, newest first; timestamps are UTC. Refresh reloads
+uncached data. Scan-level exclusions remain in StockConnect's scan audit database.
+The hosted earnings gateway must allow GET `/stockconnect/v1/trigger-results` with
+`limit`, `offset`, `ticker`, `trigger_type` and `outcome` parameters. Credentials
+remain on the server.
