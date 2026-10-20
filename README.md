@@ -40,3 +40,20 @@ uncached data. Scan-level exclusions remain in StockConnect's scan audit databas
 The hosted earnings gateway must allow GET `/stockconnect/v1/trigger-results` with
 `limit`, `offset`, `ticker`, `trigger_type` and `outcome` parameters. Credentials
 remain on the server.
+
+### StockConnect read caching
+
+Reports (including full ticker reports) and trigger-result queries use Next.js's
+persistent Data Cache with a 60-second refresh interval. Daily candles use 15
+minutes. Refreshes happen on access in the background; if validation or an
+upstream request fails, the last successful snapshot remains available. Reports
+cache the complete pagination result together, compressed to fit the cache item
+size limit. Cache keys isolate the backend, credentials, ticker and query.
+Dashboard and trigger pages show the snapshot fetch time. Existing dashboard
+rows stay visible if a later request fails. Live Tiingo prices and job/submission
+endpoints are unchanged and are not part of this cache.
+
+A cold or evicted cache still requires a healthy upstream. Cached results can be
+older during an outage; a first request after the refresh interval can return
+the old snapshot while the refresh runs. This improves availability but does
+not repair StockConnect database crashes.

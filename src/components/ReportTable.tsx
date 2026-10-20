@@ -27,17 +27,18 @@ function hasTradePlan(report: ResearchReport) {
   return report.target_price !== null || report.stop_loss_price !== null;
 }
 
-async function fetchReports(): Promise<{data: unknown[] | null; error: {message: string} | null}> {
+async function fetchReports(): Promise<{data: unknown[] | null; fetchedAt?: string | null; error: {message: string} | null}> {
   try {
     const response = await fetch("/api/reports", { cache: "no-store" });
     if (!response.ok) throw new Error("Reports are temporarily unavailable.");
-    return {data: await response.json(), error: null};
+    return {data: await response.json(), fetchedAt: response.headers.get("X-Reports-Fetched-At"), error: null};
   } catch (error) {
     return {data: null, error: {message: error instanceof Error ? error.message : "Unable to load reports."}};
   }
 }
 
 export default function ReportTable() {
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [reports, setReports]     = useState<ResearchReport[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -53,6 +54,8 @@ export default function ReportTable() {
       setError(result.error.message);
       return;
     }
+    setError(null);
+    setFetchedAt(result.fetchedAt || null);
     setReports((result.data || []).map(normalizeRow));
   }, []);
 
@@ -222,6 +225,8 @@ export default function ReportTable() {
           </span>
         </div>
 
+        {fetchedAt && <p className="trigger-note" role="status">Reports last fetched {new Date(fetchedAt).toLocaleString()}. Refreshes use a one-minute cache; during an outage, the last successful snapshot stays visible. Live prices are fetched separately.</p>}
+
         {loading && (
           <div className="table-state">
             <Loader2 size={24} className="spin" aria-hidden="true" />
@@ -236,7 +241,7 @@ export default function ReportTable() {
           </div>
         )}
 
-        {!loading && !error && (
+        {(reports.length > 0 || (!loading && !error)) && (
           <div className="table-scroll">
             <table className="report-table">
               <thead>

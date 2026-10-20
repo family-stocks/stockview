@@ -43,7 +43,7 @@ export default async function TriggersPage({ searchParams }: { searchParams: Pro
     <p className="trigger-note">Newest first · Times in UTC · “Sent” means accepted by the earnings agent, not that the report is finished. This view shows audited research decisions; scan-level exclusions are not included.</p>
     {error && <div className="card trigger-error" role="alert">{error}</div>}
     {data && <>
-      <p role="status">{data.total.toLocaleString()} matching results</p>
+      <p role="status">{data.total.toLocaleString()} matching results · Last fetched {new Date(data.fetchedAt).toLocaleString("en-GB", {timeZone: "UTC"})} UTC. Refreshes use a one-minute cache; older results remain available during an outage.</p>
       {!data.items.length && <div className="card">No results on this page. Try another filter or return to <Link href={pageUrl(1)}>page 1</Link>.</div>}
       <div className="trigger-list">{data.items.map(row => {
         const links = sources(row.assessment?.sources);

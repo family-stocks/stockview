@@ -1,4 +1,5 @@
 import 'server-only';
+import { cachedSnapshot } from './snapshot-cache';
 import { recordsConnection } from './records-connection';
 
 export const triggerTypes: Record<string, string> = { price: 'Report price', news: 'News', earnings: 'Earnings calendar', discovery: 'Daily discovery' };
@@ -8,11 +9,18 @@ export interface TriggerResult {
   research_decision: string | null; reason: string | null; submitted_job_id: string | null;
   evaluated_at: string; evidence: Record<string, unknown>; assessment: Record<string, unknown>;
 }
-export async function getTriggerResults(query: URLSearchParams): Promise<{items: TriggerResult[]; total: number}> {
+async function fetchTriggerResults(query: string): Promise<{items: TriggerResult[]; total: number}> {
   const { base, headers } = recordsConnection();
   const response = await fetch(`${base}/v1/trigger-results?${query}`, { headers, cache: 'no-store', signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error('Trigger results are temporarily unavailable.');
   const data = await response.json();
   if (!Array.isArray(data.items) || !Number.isInteger(data.total)) throw new Error('Invalid trigger response.');
   return data;
+}
+
+const getTriggerSnapshot = cachedSnapshot('trigger-results-v1', 60, fetchTriggerResults);
+export async function getTriggerResults(query: URLSearchParams) {
+  query.sort();
+  const snapshot = await getTriggerSnapshot(query.toString());
+  return {...snapshot.data, fetchedAt: snapshot.fetchedAt};
 }

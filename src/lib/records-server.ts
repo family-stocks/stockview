@@ -1,9 +1,10 @@
 import 'server-only';
+import { cachedSnapshot } from './snapshot-cache';
 import { recordsConnection } from './records-connection';
 import { FULL_COLUMNS, LIST_COLUMNS } from './reports';
 
 // Only the Next.js server receives the StockConnect credential.
-export async function getLocalReports(ticker?: string): Promise<unknown[]> {
+async function fetchLocalReports(ticker?: string): Promise<unknown[]> {
   const {base, headers} = recordsConnection();
   const records: Record<string, unknown>[] = [];
   let total = 1;
@@ -23,4 +24,10 @@ export async function getLocalReports(ticker?: string): Promise<unknown[]> {
     total = page.total;
   }
   return records.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+}
+
+// Cache the complete, validated pagination result; never publish half a refresh.
+export const getReportsSnapshot = cachedSnapshot('reports-v1', 60, fetchLocalReports);
+export async function getLocalReports(ticker?: string): Promise<unknown[]> {
+  return (await getReportsSnapshot(ticker)).data;
 }

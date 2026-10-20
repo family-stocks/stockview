@@ -222,6 +222,7 @@ export default async function StockDetailPage({ params }: { params: Promise<{ ti
             )}
           </div>
 
+          <p className="trigger-note">Daily chart data refreshes every 15 minutes on access; the last successful data is retained during an outage. The chart dates show the available history.</p>
           <Chart data={candles} indicators={indicators ?? undefined} />
         </div>
       </section>
