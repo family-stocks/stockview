@@ -27,7 +27,7 @@ async function fetchLocalReports(ticker?: string): Promise<unknown[]> {
 }
 
 // Cache the complete, validated pagination result; never publish half a refresh.
-export const getReportsSnapshot = cachedSnapshot('reports-v1', 60, fetchLocalReports);
+export const getReportsSnapshot = cachedSnapshot('reports-v1', 60, fetchLocalReports, true);
 export async function getLocalReports(ticker?: string): Promise<unknown[]> {
   return (await getReportsSnapshot(ticker)).data;
 }

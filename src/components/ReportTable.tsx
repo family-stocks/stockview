@@ -27,11 +27,11 @@ function hasTradePlan(report: ResearchReport) {
   return report.target_price !== null || report.stop_loss_price !== null;
 }
 
-async function fetchReports(): Promise<{data: unknown[] | null; fetchedAt?: string | null; error: {message: string} | null}> {
+async function fetchReports(): Promise<{data: unknown[] | null; fetchedAt?: string | null; stale?: boolean; error: {message: string} | null}> {
   try {
     const response = await fetch("/api/reports", { cache: "no-store" });
     if (!response.ok) throw new Error("Reports are temporarily unavailable.");
-    return {data: await response.json(), fetchedAt: response.headers.get("X-Reports-Fetched-At"), error: null};
+    return {data: await response.json(), fetchedAt: response.headers.get("X-Reports-Fetched-At"), stale: response.headers.get("X-Reports-Stale") === "true", error: null};
   } catch (error) {
     return {data: null, error: {message: error instanceof Error ? error.message : "Unable to load reports."}};
   }
@@ -39,6 +39,7 @@ async function fetchReports(): Promise<{data: unknown[] | null; fetchedAt?: stri
 
 export default function ReportTable() {
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
   const [reports, setReports]     = useState<ResearchReport[]>([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -56,6 +57,7 @@ export default function ReportTable() {
     }
     setError(null);
     setFetchedAt(result.fetchedAt || null);
+    setStale(Boolean(result.stale));
     setReports((result.data || []).map(normalizeRow));
   }, []);
 
@@ -225,7 +227,7 @@ export default function ReportTable() {
           </span>
         </div>
 
-        {fetchedAt && <p className="trigger-note" role="status">Reports last fetched {new Date(fetchedAt).toLocaleString()}. Refreshes use a one-minute cache; during an outage, the last successful snapshot stays visible. Live prices are fetched separately.</p>}
+        {fetchedAt && <p className="trigger-note" role="status">{stale ? "Connection unavailable — showing saved reports from" : "Reports fetched"} {new Date(fetchedAt).toLocaleString()}. Reload to fetch the latest reports. Live prices are fetched separately.</p>}
 
         {loading && (
           <div className="table-state">

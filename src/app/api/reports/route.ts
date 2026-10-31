@@ -6,6 +6,7 @@ export async function GET() {
     return Response.json(snapshot.data, {headers: {
       'Cache-Control': 'no-store',
       'X-Reports-Fetched-At': snapshot.fetchedAt,
+      'X-Reports-Stale': String(Boolean(snapshot.stale)),
     }});
   } catch {
     return Response.json({error: 'Reports are temporarily unavailable.'}, {status: 503});
