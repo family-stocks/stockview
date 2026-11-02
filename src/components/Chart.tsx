@@ -27,10 +27,10 @@ interface ChartProps {
 
 const INDICATORS = [
   { key: 'sma50',  label: 'SMA 50',  color: '#3b82f6' },
-  { key: 'sma200', label: 'SMA 200', color: '#f59e0b' },
-  { key: 'ema10',  label: 'EMA 10',  color: '#a855f7' },
+  { key: 'sma200', label: 'SMA 200', color: '#996600' },
+  { key: 'ema10',  label: 'EMA 10',  color: '#853bc4' },
   { key: 'boll',   label: 'Bollinger', color: 'rgba(59,130,246,0.5)' },
-  { key: 'vwma',   label: 'VWMA',    color: '#14b8a6' },
+  { key: 'vwma',   label: 'VWMA',    color: '#087f8c' },
 ] as const;
 
 type IndicatorKey = typeof INDICATORS[number]['key'];
@@ -38,21 +38,21 @@ type IndicatorKey = typeof INDICATORS[number]['key'];
 const CHART_OPTS = {
   layout: {
     background: { type: ColorType.Solid, color: 'transparent' },
-    textColor: '#a1a6b0',
+    textColor: '#46515e',
   },
   grid: {
-    vertLines: { color: '#2d3139', style: 1 as const },
-    horzLines: { color: '#2d3139', style: 1 as const },
+    vertLines: { color: '#e5e8ec', style: 1 as const },
+    horzLines: { color: '#e5e8ec', style: 1 as const },
   },
   crosshair: { mode: CrosshairMode.Normal },
   timeScale: {
-    borderColor: '#3f4552',
+    borderColor: '#b7bec8',
     fixLeftEdge: true,
     fixRightEdge: true,
     rightOffset: 0,
     lockVisibleTimeRangeOnResize: true,
   },
-  rightPriceScale: { borderColor: '#3f4552' },
+  rightPriceScale: { borderColor: '#b7bec8' },
 };
 
 export default function Chart({ data, indicators }: ChartProps) {
@@ -84,9 +84,9 @@ export default function Chart({ data, indicators }: ChartProps) {
     chartRef.current = chart;
 
     const candles = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981', downColor: '#ef4444',
+      upColor: '#087b50', downColor: '#bf2638',
       borderVisible: false,
-      wickUpColor: '#10b981', wickDownColor: '#ef4444',
+      wickUpColor: '#087b50', wickDownColor: '#bf2638',
     });
     candles.setData(data);
 
@@ -95,11 +95,11 @@ export default function Chart({ data, indicators }: ChartProps) {
       sma50.setData(indicators.sma50);
       seriesRef.current.sma50 = [sma50];
 
-      const sma200 = chart.addSeries(LineSeries, { color: '#f59e0b', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.sma200 });
+      const sma200 = chart.addSeries(LineSeries, { color: '#996600', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.sma200 });
       sma200.setData(indicators.sma200);
       seriesRef.current.sma200 = [sma200];
 
-      const ema10 = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.ema10 });
+      const ema10 = chart.addSeries(LineSeries, { color: '#853bc4', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.ema10 });
       ema10.setData(indicators.ema10);
       seriesRef.current.ema10 = [ema10];
 
@@ -111,7 +111,7 @@ export default function Chart({ data, indicators }: ChartProps) {
       bollLower.setData(indicators.boll.map(p => ({ time: p.time, value: p.lower })));
       seriesRef.current.boll = [bollUpper, bollMid, bollLower];
 
-      const vwma = chart.addSeries(LineSeries, { color: '#14b8a6', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.vwma });
+      const vwma = chart.addSeries(LineSeries, { color: '#087f8c', lineWidth: 1, crosshairMarkerVisible: false, visible: shown.vwma });
       vwma.setData(indicators.vwma);
       seriesRef.current.vwma = [vwma];
     }
@@ -145,7 +145,7 @@ export default function Chart({ data, indicators }: ChartProps) {
     fontWeight: 500,
     cursor: 'pointer',
     border: `1px solid ${active ? (color || 'var(--accent-primary)') : 'var(--border-subtle)'}`,
-    backgroundColor: active ? 'rgba(255,255,255,0.07)' : 'transparent',
+    backgroundColor: active ? 'var(--bg-surface-hover)' : 'transparent',
     color: active ? (color || 'var(--accent-primary)') : 'var(--text-tertiary)',
     transition: 'all 0.15s ease',
   });

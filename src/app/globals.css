@@ -1,26 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-base: #0f1115;
-  --bg-base-rgb: 15, 17, 21;
-  --bg-surface: #1a1d24;
-  --bg-surface-strong: #20242d;
-  --bg-surface-hover: #232730;
+  color-scheme: light;
+  --bg-base: #f5f6f8;
+  --bg-base-rgb: 245, 246, 248;
+  --bg-surface: #ffffff;
+  --bg-surface-strong: #edf0f3;
+  --bg-surface-hover: #f0f2f5;
 
-  --border-subtle: #2d3139;
-  --border-strong: #3f4552;
+  --border-subtle: #dce0e5;
+  --border-strong: #b7bec8;
 
-  --text-primary: #f0f2f5;
-  --text-secondary: #a1a6b0;
-  --text-tertiary: #6b7280;
+  --text-primary: #18212b;
+  --text-secondary: #46515e;
+  --text-tertiary: #5f6b78;
 
-  --accent-primary: #3b82f6;
-  --accent-primary-hover: #60a5fa;
-  --accent-secondary: #60a5fa;
+  --accent-primary: #c62032;
+  --accent-primary-hover: #a71929;
+  --accent-secondary: #a71929;
 
-  --status-up: #10b981;
-  --status-down: #ef4444;
-  --status-warning: #f59e0b;
+  --status-up: #087b50;
+  --status-down: #bf2638;
+  --status-warning: #8a5b00;
 
   --font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -58,7 +59,7 @@ body::before {
 }
 
 ::selection {
-  background: rgba(59, 130, 246, 0.32);
+  background: #f7dce0;
 }
 
 a {
@@ -185,7 +186,7 @@ tr:focus-visible {
 }
 
 .main-nav a:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--bg-surface-hover);
   color: var(--text-primary);
 }
 
@@ -459,7 +460,7 @@ tr:focus-visible {
 .filter-pill.is-active {
   color: var(--text-primary);
   border-color: var(--border-strong);
-  background: rgba(255, 255, 255, 0.065);
+  background: var(--bg-surface-hover);
 }
 
 .filter-pill.is-active[data-rating="BUY"] {
@@ -810,7 +811,7 @@ tr:focus-visible {
 .drawer-fact {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--bg-base);
   padding: 0.85rem;
 }
 
@@ -877,7 +878,7 @@ tr:focus-visible {
 }
 
 .back-link:hover {
-  background: rgba(255, 255, 255, 0.065);
+  background: var(--bg-surface-hover);
   color: var(--text-primary);
 }
 
@@ -997,7 +998,7 @@ tr:focus-visible {
 }
 
 .outline-link:hover {
-  background: rgba(255, 255, 255, 0.065);
+  background: var(--bg-surface-hover);
   color: var(--text-primary);
 }
 
@@ -1115,7 +1116,7 @@ tr:focus-visible {
 }
 
 .report-markdown code {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-base);
   border: 1px solid var(--border-subtle);
   border-radius: 0.25rem;
   padding: 0.1em 0.35em;
@@ -1124,7 +1125,7 @@ tr:focus-visible {
 }
 
 .report-markdown pre {
-  background: rgba(0, 0, 0, 0.24);
+  background: var(--bg-base);
   border: 1px solid var(--border-subtle);
   border-radius: 0.75rem;
   padding: 0.85rem 1rem;
@@ -1158,6 +1159,12 @@ tr:focus-visible {
   text-align: left;
 }
 
+.report-markdown a {
+  color: var(--accent-secondary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .report-markdown blockquote {
   border-left: 3px solid var(--accent-secondary);
   padding-left: 0.9rem;
@@ -1166,7 +1173,7 @@ tr:focus-visible {
   font-style: italic;
 }
 
-/* Calm terminal overrides: keep the new layout/data, restore the original visual tone. */
+/* Shared workspace surfaces and report presentation. */
 .topbar {
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
@@ -1382,7 +1389,7 @@ tr:focus-visible {
 .report-drawer {
   border-left: 1px solid var(--border-subtle);
   background: var(--bg-surface);
-  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.4);
+  box-shadow: -8px 0 40px rgba(24, 33, 43, 0.14);
 }
 
 .drawer-title-row > span:first-child {
@@ -1455,20 +1462,21 @@ tr:focus-visible {
 }
 
 .report-markdown {
-  font-size: 0.875rem;
-  line-height: 1.7;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.8;
 }
 
 .report-markdown h2 {
-  font-size: 1.05rem;
+  font-size: 1.25rem;
 }
 
 .report-markdown h3 {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
 }
 
 .report-markdown h4 {
-  font-size: 0.85rem;
+  font-size: 1rem;
 }
 
 .stock-review-section {
@@ -1490,11 +1498,11 @@ tr:focus-visible {
   gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border-subtle);
-  background: linear-gradient(110deg, rgba(59, 130, 246, 0.08), transparent 65%);
+  background: var(--bg-base);
 }
 
 .review-kicker {
-  color: #93baff;
+  color: var(--accent-secondary);
   font-family: var(--font-mono);
   font-size: 0.65rem;
   letter-spacing: 0.12em;
@@ -1508,7 +1516,7 @@ tr:focus-visible {
 .review-facts span, .review-facts small { display: block; color: var(--text-secondary); font-size: 0.75rem; }
 .review-facts strong { display: block; font-family: var(--font-mono); font-size: 1.15rem; margin: 0.4rem 0; }
 .review-rationale { display: flex; align-items: flex-start; gap: 0.65rem; margin: 0 1.5rem 1.25rem; padding: 1rem; border-radius: 0.5rem; background: var(--bg-base); color: var(--text-secondary); font-size: 0.85rem; line-height: 1.65; }
-.review-rationale svg { flex-shrink: 0; color: #93baff; margin-top: 0.2rem; }
+.review-rationale svg { flex-shrink: 0; color: var(--accent-secondary); margin-top: 0.2rem; }
 .checkpoint-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 0.25rem 1.5rem 1.5rem; }
 .checkpoint-columns h3 { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; }
 .checkpoint-columns h3 > span { background: var(--bg-base); color: var(--text-secondary); padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.7rem; }
@@ -1516,7 +1524,7 @@ tr:focus-visible {
 .checkpoint-list li { display: grid; grid-template-columns: 1.75rem minmax(0, 1fr); gap: 0.65rem; position: relative; padding-bottom: 1.25rem; }
 .checkpoint-list li:last-child { padding-bottom: 0; }
 .checkpoint-list li:not(:last-child)::before { content: ""; position: absolute; left: 0.85rem; top: 1.75rem; bottom: 0; width: 1px; background: var(--border-subtle); }
-.checkpoint-marker { display: flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 50%; color: #93baff; }
+.checkpoint-marker { display: flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; background: var(--bg-base); border: 1px solid var(--border-strong); border-radius: 50%; color: var(--accent-secondary); }
 .checkpoint-list strong { display: block; font-size: 0.85rem; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
 .checkpoint-list p { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.65; margin-top: 0.45rem; overflow-wrap: anywhere; }
 .checkpoint-confirmation { display: inline-block; border: 1px solid var(--border-strong); padding: 0.12rem 0.4rem; border-radius: 0.25rem; margin-top: 0.35rem; color: var(--text-secondary); font-size: 0.7rem; }
