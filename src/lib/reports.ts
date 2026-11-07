@@ -33,6 +33,7 @@ export type ResearchReport = {
   id: string
   ticker: string
   company: string
+  industry?: string
   rating: string
   model: string
   analysts: string[]
@@ -135,6 +136,7 @@ export function normalizeRow(row: unknown): ResearchReport {
     id: textValue(record.id),
     ticker: textValue(record.ticker, 'UNKNOWN').toUpperCase(),
     company: textValue(record.sec_company_name, 'Unknown Company'),
+    industry: textValue(record.industry) || undefined,
     rating: textValue(record.final_decision, 'HOLD').toUpperCase(),
     model: textValue(record.deep_think_llm) || textValue(record.llm_provider, 'Unknown'),
     analysts: Array.isArray(record.analysts)

@@ -1,9 +1,11 @@
 import { getReportsSnapshot } from '@/lib/records-server';
+import { withReportIndustries } from '@/lib/industries-server';
 
 export async function GET() {
   try {
     const snapshot = await getReportsSnapshot();
-    return Response.json(snapshot.data, {headers: {
+    const reports = await withReportIndustries(snapshot.data, Boolean(snapshot.stale));
+    return Response.json(reports, {headers: {
       'Cache-Control': 'no-store',
       'X-Reports-Fetched-At': snapshot.fetchedAt,
       'X-Reports-Stale': String(Boolean(snapshot.stale)),

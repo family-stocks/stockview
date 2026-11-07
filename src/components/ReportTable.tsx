@@ -273,6 +273,7 @@ export default function ReportTable() {
                       <div className="ticker-stack">
                         <span className="ticker-symbol">{r.ticker}</span>
                         <span className="company-name">{r.company}</span>
+                        {r.industry && <span className="company-name">{r.industry}</span>}
                       </div>
                     </td>
                     <td>
