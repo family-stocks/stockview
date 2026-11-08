@@ -248,7 +248,7 @@ export default function ReportTable() {
             <table className="report-table">
               <thead>
                 <tr>
-                  {["Ticker", "Latest", "Call", "Trade Plan", "Horizon / Review", "Source", "Generated"].map(col => (
+                  {["Ticker / Industry", "Latest", "Call", "Trade Plan", "Horizon / Review", "Source", "Generated"].map(col => (
                     <th key={col}>{col}</th>
                   ))}
                 </tr>
@@ -273,7 +273,7 @@ export default function ReportTable() {
                       <div className="ticker-stack">
                         <span className="ticker-symbol">{r.ticker}</span>
                         <span className="company-name">{r.company}</span>
-                        {r.industry && <span className="company-name">{r.industry}</span>}
+                        <span className="ticker-industry">{r.industry || "Industry unavailable"}</span>
                       </div>
                     </td>
                     <td>
@@ -372,6 +372,7 @@ export default function ReportTable() {
               <div className="drawer-grid">
                 {[
                   { label: "Latest", value: formatCurrency(latestPrices[selected.ticker]?.price) },
+                  { label: "Industry", value: selected.industry || "Unavailable" },
                   { label: "Entry price", value: formatCurrency(selected.entry_price, true) },
                   { label: "Target", value: formatCurrency(selected.target_price) },
                   { label: "Stop loss", value: formatCurrency(selected.stop_loss_price) },

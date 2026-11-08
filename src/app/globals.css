@@ -605,6 +605,12 @@ tr:focus-visible {
   font-weight: 700;
 }
 
+.ticker-industry {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .latest-price-cell {
   border: 1px solid rgba(246, 181, 63, 0.25);
   border-radius: 0.75rem;

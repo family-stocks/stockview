@@ -2,6 +2,7 @@ import 'server-only';
 import { getCache } from '@vercel/functions';
 import { decodeHTMLAttribute } from 'entities';
 import { after } from 'next/server';
+import finvizSeed from './finviz-industry-seed.json';
 import { reportRowId, reportRowTicker } from './reports';
 
 type IndustryEntry = { reportId: string; industry: string | null; retryAt?: number };
@@ -12,6 +13,8 @@ const CACHE_KEY = 'finviz-report-industries-v1';
 const BATCH_SIZE = 6;
 const BATCH_INTERVAL = 30_000;
 const RETRY_INTERVAL = 60 * 60_000;
+// One-time export of Finviz classifications for reports already on the dashboard.
+const seedIndustries: Partial<Record<string, string>> = finvizSeed;
 const cache = getCache();
 let refreshing: Promise<void> | undefined;
 
@@ -91,8 +94,9 @@ async function refreshIndustries(candidates: ReportTicker[]) {
 }
 
 export async function withReportIndustries(rows: unknown[], stale: boolean): Promise<unknown[]> {
+  let snapshot: IndustrySnapshot | undefined;
   try {
-    const snapshot = await readSnapshot();
+    snapshot = await readSnapshot();
     if (!stale && Date.now() >= snapshot.nextBatchAt) {
       const candidates = new Map<string, ReportTicker>();
       for (const row of rows) {
@@ -110,12 +114,13 @@ export async function withReportIndustries(rows: unknown[], stale: boolean): Pro
       });
     }
 
-    return rows.map(row => {
-      const ticker = reportRowTicker(row);
-      const industry = ticker && snapshot.entries[ticker]?.industry;
-      return industry ? { ...(row as Record<string, unknown>), industry } : row;
-    });
   } catch {
-    return rows;
+    // Keep the bundled labels available when the runtime cache cannot be read.
   }
+
+  return rows.map(row => {
+    const ticker = reportRowTicker(row);
+    const industry = ticker && (snapshot?.entries[ticker]?.industry ?? seedIndustries[ticker]);
+    return industry ? { ...(row as Record<string, unknown>), industry } : row;
+  });
 }
