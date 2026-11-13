@@ -227,7 +227,7 @@ export default function ReportTable() {
           </span>
         </div>
 
-        {fetchedAt && <p className="trigger-note" role="status">{stale ? "Connection unavailable — showing saved reports from" : "Reports fetched"} {new Date(fetchedAt).toLocaleString()}. Reload to fetch the latest reports. Live prices are fetched separately.</p>}
+        {fetchedAt && <p className="trigger-note" role="status">{stale ? "Showing saved reports from" : "Reports fetched"} {new Date(fetchedAt).toLocaleString()}. The server refreshes reports in the background. Live prices are fetched separately.</p>}
 
         {loading && (
           <div className="table-state">
