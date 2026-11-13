@@ -54,9 +54,10 @@ export async function refreshReportsSnapshot() {
 }
 
 export async function getReportsSnapshot() {
-  if (process.env.STOCKVIEW_REPORT_REFRESH_SECRET) {
-    const saved = await getCache().get(scheduledReportsKey()) as {payload: string; fetchedAt: string} | null;
-    if (!saved) throw new Error('Scheduled report snapshot is unavailable.');
+  const saved = process.env.VERCEL === '1'
+    ? await getCache().get(scheduledReportsKey()).catch(() => null) as {payload: string; fetchedAt: string} | null
+    : null;
+  if (saved) {
     return {
       data: JSON.parse(gunzipSync(Buffer.from(saved.payload, 'base64')).toString('utf8')) as unknown[],
       fetchedAt: saved.fetchedAt,
