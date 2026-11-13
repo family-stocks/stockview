@@ -1,4 +1,7 @@
 import 'server-only';
+import { createHash } from 'node:crypto';
+import { gzipSync, gunzipSync } from 'node:zlib';
+import { getCache } from '@vercel/functions';
 import { cachedSnapshot } from './snapshot-cache';
 import { recordsConnection } from './records-connection';
 import { FULL_COLUMNS, LIST_COLUMNS } from './reports';
@@ -31,7 +34,36 @@ const REPORTS_REVALIDATE_SECONDS = 60;
 const readReportsSnapshot = cachedSnapshot('reports-v1', REPORTS_REVALIDATE_SECONDS, fetchLocalReports);
 const readFreshReportDetails = cachedSnapshot('reports-v1', REPORTS_REVALIDATE_SECONDS, fetchLocalReports, true);
 
+function scheduledReportsKey() {
+  const {base, headers} = recordsConnection();
+  const scope = createHash('sha256').update(base).update(headers.Authorization).digest('hex');
+  return `scheduled-report-summaries-v1:${scope}`;
+}
+
+export async function refreshReportsSnapshot() {
+  const key = scheduledReportsKey();
+  const reports = await fetchLocalReports();
+  const fetchedAt = new Date().toISOString();
+  const payload = gzipSync(JSON.stringify(reports)).toString('base64');
+  if (Buffer.byteLength(payload) > 1_990_000) throw new Error('Report snapshot exceeds cache limit.');
+  const cache = getCache();
+  await cache.set(key, {payload, fetchedAt});
+  const saved = await cache.get(key) as {fetchedAt: string} | null;
+  if (saved?.fetchedAt !== fetchedAt) throw new Error('Report snapshot could not be verified.');
+  return {fetchedAt, count: reports.length};
+}
+
 export async function getReportsSnapshot() {
+  if (process.env.STOCKVIEW_REPORT_REFRESH_SECRET) {
+    const saved = await getCache().get(scheduledReportsKey()) as {payload: string; fetchedAt: string} | null;
+    if (!saved) throw new Error('Scheduled report snapshot is unavailable.');
+    return {
+      data: JSON.parse(gunzipSync(Buffer.from(saved.payload, 'base64')).toString('utf8')) as unknown[],
+      fetchedAt: saved.fetchedAt,
+      stale: Date.now() - Date.parse(saved.fetchedAt) >= 20 * 60_000,
+    };
+  }
+
   const snapshot = await readReportsSnapshot();
   return {
     ...snapshot,
